@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Neutral engineering team avatar">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F1F5F9" />
+      <stop offset="100%" stop-color="#E2E8F0" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" fill="url(#bg2)" />
+  <circle cx="120" cy="120" r="88" fill="none" stroke="#15803D" stroke-opacity="0.25" stroke-width="1.5" />
+  <circle cx="120" cy="92" r="34" fill="#CBD5E1" stroke="#94A3B8" stroke-width="1.5" />
+  <path d="M56 206 C58 164 85 144 120 144 C155 144 182 164 184 206" fill="#CBD5E1" stroke="#94A3B8" stroke-width="1.5" />
+</svg>

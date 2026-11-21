@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexusTekFusion Private Limited — Drones, Hardware &amp; Electronics Store</title>
+  <meta name="description" content="Official e-commerce store of NexusTekFusion Private Limited (Nagpur). Shop KRASHIVANTRI agricultural drones, robotics, 3D printers, embedded systems, and engineering kits." />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    :root {
+      --navy: #0b1b3b;
+      --navy-dark: #071229;
+      --blue: #1d4ed8;
+      --blue-hover: #1e40af;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --success: #047857;
+      --danger: #b91c1c;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font: inherit; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+
+    /* Top Announcement & Navbar */
+    .announcement {
+      background: var(--navy-dark);
+      color: #e2e8f0;
+      font-size: 12px;
+      text-align: center;
+      padding: 8px 16px;
+    }
+    .announcement a { color: #93c5fd; font-weight: 600; text-decoration: underline; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      height: 68px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--navy), var(--blue));
+      color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px;
+    }
+    .brand small { display: block; font-size: 10px; font-weight: 600; color: var(--blue); letter-spacing: 0.08em; }
+    nav.nav-links { display: flex; gap: 20px; font-size: 14px; font-weight: 600; color: #334155; }
+    nav.nav-links a:hover { color: var(--blue); }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 15px; border-radius: 8px; border: 1px solid transparent;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s ease;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-hover); }
+    .btn-navy { background: var(--navy); color: #fff; }
+    .btn-navy:hover { background: #132954; }
+    .btn-outline { background: #fff; border-color: #cbd5e1; color: var(--text); }
+    .btn-outline:hover { background: #f1f5f9; }
+    .btn-sm { padding: 7px 11px; font-size: 12px; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 3px 8px;
+      border-radius: 6px; font-size: 11px; font-weight: 700;
+    }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 55%, #16336d 100%);
+      color: #fff;
+      padding: 56px 0;
+    }
+    .hero-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 36px; align-items: center; }
+    .hero-kicker { font-size: 12px; font-weight: 700; color: #93c5fd; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
+    .hero h1 { font-size: clamp(28px, 4vw, 44px); line-height: 1.12; margin-bottom: 14px; font-weight: 800; }
+    .hero p { color: #cbd5e1; font-size: 15px; max-width: 580px; margin-bottom: 24px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .hero-card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .stat-box { background: rgba(7, 18, 41, 0.55); padding: 12px; border-radius: 8px; }
+    .stat-box strong { display: block; font-size: 20px; color: #fff; }
+    .stat-box span { font-size: 11px; color: #cbd5e1; }
+
+    /* Sections & Controls */
+    section { padding: 48px 0; }
+    .section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .section-head h2 { font-size: 26px; font-weight: 800; color: var(--navy); }
+    .section-head p { font-size: 14px; color: var(--muted); }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+      background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 18px;
+    }
+    .search-box { flex: 1; min-width: 220px; display: flex; gap: 8px; }
+    .input, select.input, textarea.input {
+      width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+      font-size: 13px; background: #fff; color: var(--text);
+    }
+    .input:focus { outline: none; border-color: var(--blue); }
+
+    .cat-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .cat-pill {
+      padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: #fff; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .cat-pill.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+    /* Product Grid */
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 20px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s ease;
+    }
+    .card:hover { box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08); }
+    .card-img { position: relative; aspect-ratio: 4 / 3; background: #eef2ff; overflow: hidden; }
+    .card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .stock-tag { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.95); color: var(--navy); }
+    .sale-tag { position: absolute; top: 10px; right: 10px; background: var(--blue); color: #fff; }
+    .card-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    .card-cat { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; }
+    .card-title { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.3; }
+    .card-desc { font-size: 13px; color: var(--muted); }
+    .spec-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 11px; }
+    .spec-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+    .spec-row span:first-child { color: var(--muted); }
+    .spec-row span:last-child { font-weight: 600; font-family: ui-monospace, monospace; }
+    .price-row { display: flex; align-items: baseline; gap: 8px; margin-top: auto; padding-top: 4px; }
+    .price-now { font-size: 18px; font-weight: 800; color: var(--navy); }
+    .price-old { font-size: 12px; color: #94a3b8; text-decoration: line-through; }
+    .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card-actions .full { grid-column: 1 / -1; }
+
+    /* Support & Track Order Panels */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .panel { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+    .form-grid { display: grid; gap: 12px; }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Drawers & Modals */
+    .backdrop {
+      position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.62);
+      display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    .backdrop.open { display: flex; }
+    .modal {
+      width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto;
+      background: #fff; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 24px 48px rgba(2, 6, 23, 0.25);
+    }
+    .modal-head {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; background: #f8fafc;
+    }
+    .modal-body { padding: 20px; display: grid; gap: 16px; }
+    .drawer-backdrop { justify-content: flex-end; padding: 0; }
+    .drawer {
+      width: 100%; max-width: 430px; height: 100%; background: #fff;
+      display: flex; flex-direction: column; box-shadow: -8px 0 32px rgba(2, 6, 23, 0.2);
+    }
+    .drawer-items { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 12px; align-content: start; }
+    .cart-item { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; align-items: center; }
+    .cart-item img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+    .drawer-foot { padding: 16px; border-top: 1px solid var(--border); background: #f8fafc; display: grid; gap: 10px; }
+
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; z-index: 80;
+      background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .toast.show { display: block; }
+
+    footer { background: var(--navy-dark); color: #cbd5e1; padding: 40px 0 24px; margin-top: 40px; font-size: 13px; }
+    .footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 28px; margin-bottom: 24px; }
+    footer h4 { color: #fff; margin-bottom: 10px; font-size: 14px; }
+    footer li { list-style: none; margin-bottom: 6px; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.12); padding-top: 16px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; font-size: 12px; color: #94a3b8; }
+
+    @media (max-width: 860px) {
+      .hero-grid, .two-col, .footer-grid { grid-template-columns: 1fr; }
+      nav.nav-links { display: none; }
+      .form-row-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="announcement">
+    Free Pan-India Shipping Above ₹2,500 · Secure Razorpay Checkout · Customer Care:
+    <a href="mailto:info@nexustekfusion.in">info@nexustekfusion.in</a>
+  </div>
+
+  <header>
+    <div class="container nav-row">
+      <a href="#top" class="brand">
+        <div class="brand-mark">NTF</div>
+        <div>
+          NEXUSTEKFUSION
+          <small>KRASHIVANTRI · HARDWARE STORE</small>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="#catalog">Shop Store</a>
+        <a href="#krashivantri">KRASHIVANTRI</a>
+        <a href="#track-order">Track Order</a>
+        <a href="#support">Customer Care</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="btn btn-outline btn-sm" id="authBtn" onclick="openAuthModal()">Sign In</button>
+        <button class="btn btn-navy btn-sm" onclick="toggleCart(true)">Cart (<span id="cartCount">0</span>)</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <div class="hero-kicker">NEXUSTEKFUSION PRIVATE LIMITED · NAGPUR</div>
+          <h1>Agricultural Drones, Robotics, Electronics &amp; 3D Hardware Store</h1>
+          <p>
+            Official e-commerce platform for KRASHIVANTRI X &amp; X PRO agricultural UAVs, STM32 flight controllers,
+            industrial CoreXY 3D printers, carbon filaments, IoT nodes, and engineering project kits.
+          </p>
+          <div class="hero-actions">
+            <a href="#catalog" class="btn btn-primary">Shop All 12 Categories</a>
+            <a href="mailto:info@nexustekfusion.in?subject=Store%20Enquiry" class="btn btn-outline">Email Customer Care</a>
+          </div>
+        </div>
+        <div class="hero-card" id="krashivantri">
+          <div style="font-size:12px;font-weight:700;color:#93c5fd;">FLAGSHIP UAV ECOSYSTEM</div>
+          <h3 style="font-size:20px;margin:4px 0 8px;">KRASHIVANTRI X &amp; X PRO</h3>
+          <p style="font-size:13px;margin-bottom:0;">
+            Indigenous agricultural drone platforms engineered for precision crop spraying, telemetry, and spare-part maintainability.
+          </p>
+          <div class="hero-stats">
+            <div class="stat-box"><strong>12</strong><span>Store Categories</span></div>
+            <div class="stat-box"><strong>18% GST</strong><span>Tax Invoice Ready</span></div>
+            <div class="stat-box"><strong>Razorpay</strong><span>UPI / Cards / NetBanking</span></div>
+            <div class="stat-box"><strong>Pan-India</strong><span>Nagpur Dispatch</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Our Drones Showcase on Front Page -->
+    <section id="our-drones" style="padding-bottom: 12px;">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Our Drones — KRASHIVANTRI &amp; Custom UAVs</h2>
+            <p>Flagship agricultural spraying platforms and custom carbon-fiber drone kits ready for field deployment.</p>
+          </div>
+          <a href="#catalog" onclick="selectCategory('agricultural-drones')" class="btn btn-outline btn-sm">Filter All Drones</a>
+        </div>
+        <div class="two-col">
+          <div class="card" style="background:#0b1b3b;color:#fff;border-color:#1e3a8a;">
+            <div class="card-img">
+              <img src="/src/assets/images/service_agri_drone_1794981061744.jpg" alt="KRASHIVANTRI X Agricultural Drone" onerror="this.onerror=null;this.src=makeSvgThumb('KRASHIVANTRI X')" />
+              <span class="badge sale-tag">Flagship Agri-UAV</span>
+            </div>
+            <div class="card-body">
+              <div class="card-cat" style="color:#93c5fd;">KRASHIVANTRI X Series</div>
+              <h3 class="card-title" style="color:#fff;font-size:20px;">KRASHIVANTRI X</h3>
+              <p class="card-desc" style="color:#cbd5e1;">Smart Agriculture. Precision Spraying. Modular 3K carbon-fiber multi-rotor built for field maintainability.</p>
+              <div class="card-actions" style="margin-top:auto;">
+                <button class="btn btn-outline btn-sm" onclick="openProductModal(1)">View Details</button>
+                <a class="btn btn-primary btn-sm" href="mailto:info@nexustekfusion.in?subject=KRASHIVANTRI%20X%20Quote">Request Quote</a>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="background:#0b1b3b;color:#fff;border-color:#1e3a8a;">
+            <div class="card-img">
+              <img src="/src/assets/images/hero_nexustek_engineering_1794981062404.jpg" alt="KRASHIVANTRI X PRO Commercial Drone" onerror="this.onerror=null;this.src=makeSvgThumb('KRASHIVANTRI X PRO')" />
+              <span class="badge sale-tag">Enterprise Fleet</span>
+            </div>
+            <div class="card-body">
+              <div class="card-cat" style="color:#93c5fd;">KRASHIVANTRI X PRO Series</div>
+              <h3 class="card-title" style="color:#fff;font-size:20px;">KRASHIVANTRI X PRO</h3>
+              <p class="card-desc" style="color:#cbd5e1;">Advanced Intelligence. Precision Agriculture. High-uptime commercial spraying &amp; RTK-ready drone fleet system.</p>
+              <div class="card-actions" style="margin-top:auto;">
+                <button class="btn btn-outline btn-sm" onclick="openProductModal(2)">View Details</button>
+                <a class="btn btn-primary btn-sm" href="mailto:info@nexustekfusion.in?subject=KRASHIVANTRI%20X%20PRO%20Quote">Request Quote</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Store Catalog -->
+    <section id="catalog">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Online Engineering Store</h2>
+            <p>Browse all 12 dedicated hardware categories with transparent INR pricing and technical specs.</p>
+          </div>
+          <div style="font-size:13px;color:var(--muted);">Showing <strong id="resultCount">0</strong> products</div>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-box">
+            <input id="searchInput" class="input" type="search" placeholder="Search drones, H743, ESP32, 3D printer, SKU..." oninput="renderProducts()" />
+          </div>
+          <select id="sortSelect" class="input" style="width:auto;min-width:180px;" onchange="renderProducts()">
+            <option value="featured">Sort: Featured</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+          </select>
+        </div>
+
+        <div class="cat-pills" id="categoryPills"></div>
+        <div class="product-grid" id="productGrid"></div>
+      </div>
+    </section>
+
+    <!-- Track Order & Customer Care -->
+    <section id="track-order" style="background:#fff;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+      <div class="container two-col">
+        <div class="panel">
+          <h2 style="font-size:20px;color:var(--navy);margin-bottom:6px;">Track Store Order</h2>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+            Enter your Order Number (e.g. NTF-ORD-...) to view live payment and dispatch status.
+          </p>
+          <form onsubmit="handleTrackOrder(event)" class="form-grid">
+            <div style="display:flex;gap:8px;">
+              <input id="trackOrderId" class="input" placeholder="Enter Order Number" required />
+              <button type="submit" class="btn btn-navy">Track</button>
+            </div>
+            <div id="trackResult" style="font-size:13px;color:var(--text);"></div>
+          </form>
+        </div>
+
+        <div class="panel" id="support">
+          <h2 style="font-size:20px;color:var(--navy);margin-bottom:6px;">Customer Care &amp; Enquiries</h2>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+            Direct Email: <a href="mailto:info@nexustekfusion.in" style="color:var(--blue);font-weight:600;">info@nexustekfusion.in</a>
+          </p>
+          <form onsubmit="handleContactSubmit(event)" class="form-grid">
+            <div class="form-row-2">
+              <input id="cName" class="input" placeholder="Your Name *" required />
+              <input id="cEmail" class="input" type="email" placeholder="Your Email *" required />
+            </div>
+            <div class="form-row-2">
+              <input id="cPhone" class="input" placeholder="Mobile Number" />
+              <select id="cCat" class="input">
+                <option>Product enquiry</option>
+                <option>Order &amp; Shipping Support</option>
+                <option>Razorpay Payment &amp; Refund</option>
+                <option>KRASHIVANTRI Drone Sales</option>
+                <option>Bulk / B2B Institutional Quote</option>
+              </select>
+            </div>
+            <textarea id="cMsg" class="input" rows="3" placeholder="Write your enquiry..." required></textarea>
+            <button type="submit" class="btn btn-primary">Send Support Request</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <h4>NEXUSTEKFUSION PRIVATE LIMITED</h4>
+          <p>H NO. 565/19 NIT, SANKUL NEW COTTON MARK, Ganjipeth, Nagpur 440018, Maharashtra, India</p>
+          <p style="margin-top:8px;">CIN: U30305ME2026PTC474052 · Customer Care: <a href="mailto:info@nexustekfusion.in" style="color:#93c5fd;">info@nexustekfusion.in</a></p>
+        </div>
+        <div>
+          <h4>Store Categories</h4>
+          <ul>
+            <li><a href="#catalog" onclick="selectCategory('agricultural-drones')">Agricultural Drones</a></li>
+            <li><a href="#catalog" onclick="selectCategory('krashivantri-x-series')">KRASHIVANTRI X Series</a></li>
+            <li><a href="#catalog" onclick="selectCategory('robotics-and-automation')">Robotics &amp; Automation</a></li>
+            <li><a href="#catalog" onclick="selectCategory('3d-printers')">3D Printers &amp; Materials</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Customer Links</h4>
+          <ul>
+            <li><a href="#track-order">Track Order</a></li>
+            <li><a href="#support">Contact Customer Care</a></li>
+            <li><a href="mailto:info@nexustekfusion.in">info@nexustekfusion.in</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 NEXUSTEKFUSION PRIVATE LIMITED. All rights reserved.</span>
+        <span>Official Website: https://nexustekfusion.in</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Product Details Modal -->
+  <div class="backdrop" id="productModal" onclick="if(event.target===this) closeProductModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div id="pmCategory" style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;"></div>
+          <h3 id="pmTitle" style="font-size:18px;color:var(--navy);"></h3>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeProductModal()">Close</button>
+      </div>
+      <div class="modal-body" id="pmBody"></div>
+    </div>
+  </div>
+
+  <!-- Cart Slide-Over Drawer -->
+  <div class="backdrop drawer-backdrop" id="cartBackdrop" onclick="if(event.target===this) toggleCart(false)">
+    <div class="drawer">
+      <div class="modal-head">
+        <h3>Shopping Cart</h3>
+        <button class="btn btn-outline btn-sm" onclick="toggleCart(false)">Close</button>
+      </div>
+      <div class="drawer-items" id="cartItems"></div>
+      <div class="drawer-foot">
+        <div style="display:flex;gap:8px;">
+          <input id="couponInput" class="input" placeholder="Coupon (try NTFWELCOME)" />
+          <button class="btn btn-outline btn-sm" onclick="applyCoupon()">Apply</button>
+        </div>
+        <div id="cartTotals" style="font-size:13px;display:grid;gap:4px;"></div>
+        <button class="btn btn-primary" onclick="openCheckoutModal()">Proceed to Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout Modal -->
+  <div class="backdrop" id="checkoutModal" onclick="if(event.target===this) closeCheckoutModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Checkout &amp; Razorpay Payment</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeCheckoutModal()">Close</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="submitCheckout(event)" class="form-grid">
+          <div class="form-row-2">
+            <input id="chkName" class="input" placeholder="Full Name *" required />
+            <input id="chkEmail" class="input" type="email" placeholder="Email for Receipt *" required />
+          </div>
+          <div class="form-row-2">
+            <input id="chkMobile" class="input" placeholder="Mobile Number *" required />
+            <input id="chkPin" class="input" maxlength="6" placeholder="6-Digit PIN Code *" required />
+          </div>
+          <input id="chkAddress" class="input" placeholder="House / Flat / Street / Area *" required />
+          <div class="form-row-2">
+            <input id="chkCity" class="input" placeholder="City *" required />
+            <input id="chkState" class="input" placeholder="State *" required />
+          </div>
+          <div id="checkoutSummary" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;"></div>
+          <button type="submit" class="btn btn-primary">Place Order &amp; Pay via Razorpay</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign In / Create Account Modal (Normal Email + Password) -->
+  <div class="backdrop" id="authModal" onclick="if(event.target===this) closeAuthModal()">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-head">
+        <h3 id="authTitle">Customer Sign In</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeAuthModal()">Close</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn btn-navy btn-sm" id="tabLoginBtn" onclick="switchAuthTab('login')">Sign In</button>
+          <button class="btn btn-outline btn-sm" id="tabRegBtn" onclick="switchAuthTab('register')">Create Account</button>
+        </div>
+        <form onsubmit="submitAuth(event)" class="form-grid">
+          <div id="regOnlyFields" style="display:none;gap:12px;" class="form-grid">
+            <input id="authName" class="input" placeholder="Full Name *" />
+            <input id="authPhone" class="input" placeholder="Mobile Number" />
+          </div>
+          <input id="authEmail" class="input" type="email" placeholder="Email Address *" required />
+          <input id="authPass" class="input" type="password" minlength="6" placeholder="Password *" required />
+          <button type="submit" class="btn btn-primary" id="authSubmitBtn">Sign In</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // =========================================================================
+    // Configuration (Supabase Project + Razorpay Public Key ID when configured)
+    // =========================================================================
+    const SUPABASE_URL = "https://leawuzhjkuzwgzdduwzq.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_JCsq4SAwU3Lw9265lJ8maw_t9pRSS4I";
+    const RAZORPAY_PUBLIC_KEY = ""; // Optional: set rzp_live_... or rzp_test_... (NEVER put key_secret in HTML/JS)
+
+    const supabaseClient =
+      window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY
+        ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        : null;
+
+    // SVG inline visual fallback so cards render cleanly offline or online
+    function makeSvgThumb(label, accent = "#1d4ed8") {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0b1b3b"/><stop offset="100%" stop-color="${accent}"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/><circle cx="330" cy="60" r="70" fill="rgba(255,255,255,0.08)"/><text x="24" y="250" fill="#ffffff" font-family="sans-serif" font-size="18" font-weight="700">${label.replace(/[<>&"]/g, "")}</text></svg>`;
+      return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+    }
+
+    const CATEGORIES = [
+      { slug: "all", name: "All Categories" },
+      { slug: "agricultural-drones", name: "Agricultural Drones" },
+      { slug: "krashivantri-x-series", name: "KRASHIVANTRI X Series" },
+      { slug: "krashivantri-x-pro-series", name: "KRASHIVANTRI X PRO Series" },
+      { slug: "custom-drone-development", name: "Custom Drone Development" },
+      { slug: "robotics-and-automation", name: "Robotics and Automation" },
+      { slug: "3d-printers", name: "3D Printers" },
+      { slug: "3d-printing-materials", name: "3D Printing Materials" },
+      { slug: "electronic-components", name: "Electronic Components" },
+      { slug: "iot-embedded-systems", name: "IoT and Embedded Systems" },
+      { slug: "sensors-and-controllers", name: "Sensors and Controllers" },
+      { slug: "drone-accessories-spare-parts", name: "Drone Accessories & Spares" },
+      { slug: "engineering-project-kits", name: "Engineering Project Kits" }
+    ];
+
+    const PRODUCTS = [
+      {
+        id: 1, sku: "KRASH-X-01", category: "krashivantri-x-series", categoryName: "KRASHIVANTRI X Series",
+        name: "KRASHIVANTRI X Agricultural Drone", price: 0, discountPrice: null, stock: 5,
+        shortDesc: "Modular indigenous agricultural spraying UAV engineered for field spraying missions.",
+        specs: { Architecture: "Modular Multi-Rotor", Application: "Precision Spraying", Support: "Nagpur Lab" },
+        img: "/src/assets/images/service_agri_drone_1794981061744.jpg"
+      },
+      {
+        id: 2, sku: "KRASH-XPRO-01", category: "krashivantri-x-pro-series", categoryName: "KRASHIVANTRI X PRO Series",
+        name: "KRASHIVANTRI X PRO Commercial UAV", price: 0, discountPrice: null, stock: 5,
+        shortDesc: "Extended-capability agricultural UAV platform for commercial spraying fleets.",
+        specs: { Series: "X PRO Commercial", Propulsion: "High-Efficiency BLDC", Telemetry: "RTK Ready" },
+        img: "/src/assets/images/hero_nexustek_engineering_1794981062404.jpg"
+      },
+      {
+        id: 3, sku: "NTF-UAV-AG10", category: "agricultural-drones", categoryName: "Agricultural Drones",
+        name: "10L Carbon-Fiber Agri-UAV Frame Kit", price: 34500, discountPrice: 31900, stock: 6,
+        shortDesc: "Foldable 3K carbon-fiber frame kit with CNC 7075 aluminum arm locks.",
+        specs: { Wheelbase: "1420 mm", Payload: "10 kg", Material: "3K Carbon + 7075 Alloy" },
+        img: "/src/assets/images/service_agri_drone_1794981061744.jpg"
+      },
+      {
+        id: 4, sku: "NTF-DEV-HEX800", category: "custom-drone-development", categoryName: "Custom Drone Development",
+        name: "X800 Custom Mapping & Survey Hexacopter Kit", price: 28900, discountPrice: 25499, stock: 9,
+        shortDesc: "Modular hexacopter airframe with dual battery trays and LiDAR gimbal rails.",
+        specs: { Wheelbase: "800 mm", PayloadBay: "12 mm Rail", Airframe: "2.4 kg Carbon" },
+        img: "/src/assets/images/service_drone_repair_1794987205295.jpg"
+      },
+      {
+        id: 5, sku: "NTF-AMR-LIDAR", category: "robotics-and-automation", categoryName: "Robotics and Automation",
+        name: "AMR-200 Autonomous Mobile Robotics Chassis", price: 42000, discountPrice: 38900, stock: 5,
+        shortDesc: "Omnidirectional ROS2 chassis with encoder motors and machined aluminum deck.",
+        specs: { Payload: "25 kg", Drive: "4x Encoder Motors", Compute: "Jetson / RPi5 Bay" },
+        img: "/src/assets/images/service_robotics_automation_1794981063545.jpg"
+      },
+      {
+        id: 6, sku: "NTF-3DP-COREXY300", category: "3d-printers", categoryName: "3D Printers",
+        name: "NTF-CoreXY Pro 300 High-Speed 3D Printer", price: 68500, discountPrice: 63900, stock: 4,
+        shortDesc: "Enclosed CoreXY 300×300×300 mm industrial printer for PA12-CF & ABS.",
+        specs: { BuildVolume: "300×300×300 mm", Hotend: "320°C Hardened", Firmware: "Klipper" },
+        img: "/src/assets/images/service_3d_printing_1794981063445.jpg"
+      },
+      {
+        id: 7, sku: "NTF-FIL-PA12CF-1KG", category: "3d-printing-materials", categoryName: "3D Printing Materials",
+        name: "PA12-CF Carbon-Fiber Nylon Spool (1kg)", price: 4490, discountPrice: 3990, stock: 36,
+        shortDesc: "1.75 mm 20% chopped carbon-fiber Nylon filament for structural drone parts.",
+        specs: { Diameter: "1.75 mm", NozzleTemp: "275–295°C", NetWeight: "1.0 kg" },
+        img: "/src/assets/images/service_3d_printing_1794981063445.jpg"
+      },
+      {
+        id: 8, sku: "NTF-PMU-12S", category: "electronic-components", categoryName: "Electronic Components",
+        name: "12S Smart UAV Power Distribution & Current Sensor", price: 4800, discountPrice: 4350, stock: 22,
+        shortDesc: "4oz heavy-copper 6S–14S PDB with CAN & I2C real-time telemetry.",
+        specs: { Voltage: "18V–60V", PeakCurrent: "240A Cont.", Telemetry: "CAN & I2C" },
+        img: "/src/assets/images/service_pcb_electronics_1794981062614.jpg"
+      },
+      {
+        id: 9, sku: "NTF-IOT-ESP32S3", category: "iot-embedded-systems", categoryName: "IoT and Embedded Systems",
+        name: "NTF Industrial ESP32-S3 Telemetry & RS485 Node", price: 2850, discountPrice: 2499, stock: 32,
+        shortDesc: "DIN-rail ESP32-S3 controller with isolated RS485 Modbus, CAN & dual relays.",
+        specs: { MCU: "ESP32-S3 240MHz", Comms: "Wi-Fi/BLE/RS485/CAN", Input: "9V–36V DC" },
+        img: "/src/assets/images/service_pcb_single_double_1794987204677.jpg"
+      },
+      {
+        id: 10, sku: "NTF-FC-H743", category: "sensors-and-controllers", categoryName: "Sensors and Controllers",
+        name: "NTF-H743 Dual-IMU Flight Controller", price: 12499, discountPrice: 10999, stock: 18,
+        shortDesc: "STM32H743 flight controller with dual redundant IMUs and dual CAN bus.",
+        specs: { MCU: "STM32H743 480MHz", IMU: "Dual ICM-42688-P", Ports: "2x CAN, 7x UART" },
+        img: "/src/assets/images/service_pcb_electronics_1794981062614.jpg"
+      },
+      {
+        id: 11, sku: "NTF-NOZ-SPRAY4", category: "drone-accessories-spare-parts", categoryName: "Drone Accessories & Spares",
+        name: "High-Pressure Agri-UAV Pump & Nozzle Kit", price: 6490, discountPrice: 5790, stock: 28,
+        shortDesc: "5 L/min chemical-resistant brushless diaphragm pump with 4 flat-fan nozzles.",
+        specs: { FlowRate: "5.0 L/min", Input: "6S–12S LiPo", Control: "PWM" },
+        img: "/src/assets/images/service_agri_drone_1794981061744.jpg"
+      },
+      {
+        id: 12, sku: "NTF-KIT-ROVER01", category: "engineering-project-kits", categoryName: "Engineering Project Kits",
+        name: "Autonomous IoT & ROS2 Vision Robotics Kit", price: 14999, discountPrice: 12999, stock: 15,
+        shortDesc: "Complete B.Tech / R&D lab kit with 4WD encoder deck, ESP32-S3 & documentation.",
+        specs: { Controller: "ESP32-S3 + STM32", Sensors: "IMU + Ultrasonic", Code: "C++ / ROS2" },
+        img: "/src/assets/images/service_robotics_automation_1794981063545.jpg"
+      }
+    ];
+
+    // State
+    let selectedCategory = "all";
+    let cart = JSON.parse(localStorage.getItem("ntf_standalone_cart") || "[]");
+    let orders = JSON.parse(localStorage.getItem("ntf_standalone_orders") || "[]");
+    let currentUser = JSON.parse(localStorage.getItem("ntf_standalone_user") || "null");
+    let discountPercent = 0;
+    let authTab = "login";
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3200);
+    }
+
+    function saveCart() {
+      localStorage.setItem("ntf_standalone_cart", JSON.stringify(cart));
+      document.getElementById("cartCount").textContent = cart.reduce((s, i) => s + i.qty, 0);
+    }
+
+    function renderCategories() {
+      const wrap = document.getElementById("categoryPills");
+      wrap.innerHTML = CATEGORIES.map(
+        (c) => `<button class="cat-pill ${selectedCategory === c.slug ? "active" : ""}" onclick="selectCategory('${c.slug}')">${c.name}</button>`
+      ).join("");
+    }
+
+    function selectCategory(slug) {
+      selectedCategory = slug;
+      renderCategories();
+      renderProducts();
+    }
+
+    function renderProducts() {
+      const q = document.getElementById("searchInput").value.trim().toLowerCase();
+      const sort = document.getElementById("sortSelect").value;
+      let list = PRODUCTS.filter((p) => {
+        const catOk = selectedCategory === "all" || p.category === selectedCategory;
+        const qOk =
+          !q ||
+          p.name.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.shortDesc.toLowerCase().includes(q) ||
+          p.categoryName.toLowerCase().includes(q);
+        return catOk && qOk;
+      });
+      if (sort === "price_asc") list.sort((a, b) => (a.discountPrice ?? a.price) - (b.discountPrice ?? b.price));
+      if (sort === "price_desc") list.sort((a, b) => (b.discountPrice ?? b.price) - (a.discountPrice ?? a.price));
+
+      document.getElementById("resultCount").textContent = list.length;
+      const grid = document.getElementById("productGrid");
+      if (list.length === 0) {
+        grid.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;">No matching products found.</div>`;
+        return;
+      }
+
+      grid.innerHTML = list.map((p) => {
+        const activePrice = p.discountPrice ?? p.price;
+        const isQuote = p.price <= 0;
+        const specEntries = Object.entries(p.specs).slice(0, 2);
+        const fallback = makeSvgThumb(p.name);
+        return `
+          <article class="card">
+            <div class="card-img">
+              <img src="${p.img}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallback}'" />
+              <span class="badge stock-tag">${p.stock > 0 ? "In Stock" : "Out of Stock"}</span>
+              ${!isQuote && p.discountPrice ? `<span class="badge sale-tag">${Math.round(((p.price - p.discountPrice) / p.price) * 100)}% OFF</span>` : ""}
+            </div>
+            <div class="card-body">
+              <div class="card-cat">${p.categoryName} · ${p.sku}</div>
+              <h3 class="card-title">${p.name}</h3>
+              <p class="card-desc">${p.shortDesc}</p>
+              <div class="spec-box">
+                ${specEntries.map(([k, v]) => `<div class="spec-row"><span>${k}</span><span>${v}</span></div>`).join("")}
+              </div>
+              <div class="price-row">
+                ${
+                  isQuote
+                    ? `<span class="price-now" style="font-size:15px;">Request Quote</span>`
+                    : `<span class="price-now">₹${activePrice.toLocaleString("en-IN")}</span>${
+                        p.discountPrice ? `<span class="price-old">₹${p.price.toLocaleString("en-IN")}</span>` : ""
+                      }`
+                }
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-outline btn-sm" onclick="openProductModal(${p.id})">View Details</button>
+                ${
+                  isQuote
+                    ? `<a class="btn btn-primary btn-sm" href="mailto:info@nexustekfusion.in?subject=${encodeURIComponent("Quote Request: " + p.name)}">Enquire</a>`
+                    : `<button class="btn btn-primary btn-sm" onclick="buyNow(${p.id})">Buy Now</button>
+                       <button class="btn btn-navy btn-sm full" onclick="addToCart(${p.id})">Add to Cart</button>`
+                }
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function openProductModal(id) {
+      const p = PRODUCTS.find((x) => x.id === id);
+      if (!p) return;
+      const isQuote = p.price <= 0;
+      const activePrice = p.discountPrice ?? p.price;
+      const fallback = makeSvgThumb(p.name);
+      document.getElementById("pmCategory").textContent = `${p.categoryName} · SKU: ${p.sku}`;
+      document.getElementById("pmTitle").textContent = p.name;
+      document.getElementById("pmBody").innerHTML = `
+        <img src="${p.img}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallback}'" style="width:100%;max-height:260px;object-fit:cover;border-radius:10px;" />
+        <p style="font-size:14px;color:#334155;">${p.shortDesc}</p>
+        <div class="spec-box">
+          ${Object.entries(p.specs).map(([k, v]) => `<div class="spec-row"><span>${k}</span><span>${v}</span></div>`).join("")}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            ${isQuote ? `<strong style="font-size:18px;">Custom Commercial Quote</strong>` : `<strong style="font-size:22px;color:var(--navy);">₹${activePrice.toLocaleString("en-IN")}</strong> <span style="font-size:12px;color:var(--muted);">+ 18% GST</span>`}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <a class="btn btn-outline btn-sm" href="mailto:info@nexustekfusion.in?subject=${encodeURIComponent("Support: " + p.name)}">Contact Support</a>
+            ${!isQuote ? `<button class="btn btn-navy btn-sm" onclick="addToCart(${p.id});closeProductModal();">Add to Cart</button><button class="btn btn-primary btn-sm" onclick="closeProductModal();buyNow(${p.id});">Buy Now</button>` : ""}
+          </div>
+        </div>
+      `;
+      document.getElementById("productModal").classList.add("open");
+    }
+    function closeProductModal() { document.getElementById("productModal").classList.remove("open"); }
+
+    function addToCart(id) {
+      const p = PRODUCTS.find((x) => x.id === id);
+      if (!p || p.price <= 0) return;
+      const found = cart.find((c) => c.id === id);
+      if (found) found.qty = Math.min(p.stock, found.qty + 1);
+      else cart.push({ id: p.id, name: p.name, sku: p.sku, price: p.discountPrice ?? p.price, img: p.img, qty: 1 });
+      saveCart();
+      renderCart();
+      toggleCart(true);
+      showToast(`Added "${p.name}" to cart`);
+    }
+
+    function buyNow(id) {
+      addToCart(id);
+      toggleCart(false);
+      openCheckoutModal();
+    }
+
+    function changeQty(id, delta) {
+      const item = cart.find((c) => c.id === id);
+      if (!item) return;
+      item.qty += delta;
+      if (item.qty <= 0) cart = cart.filter((c) => c.id !== id);
+      saveCart();
+      renderCart();
+    }
+
+    function applyCoupon() {
+      const code = document.getElementById("couponInput").value.trim().toUpperCase();
+      if (code === "NTFWELCOME") {
+        discountPercent = 10;
+        showToast("Coupon NTFWELCOME applied (10% off)");
+      } else {
+        discountPercent = 0;
+        showToast("Invalid coupon code (try NTFWELCOME)");
+      }
+      renderCart();
+    }
+
+    function getCartTotals() {
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const discount = Math.round((subtotal * discountPercent) / 100);
+      const taxable = Math.max(0, subtotal - discount);
+      const gst = Math.round(taxable * 0.18);
+      const shipping = taxable === 0 ? 0 : taxable >= 2500 ? 0 : 99;
+      return { subtotal, discount, gst, shipping, total: taxable + gst + shipping };
+    }
+
+    function renderCart() {
+      const wrap = document.getElementById("cartItems");
+      if (cart.length === 0) {
+        wrap.innerHTML = `<div style="text-align:center;color:var(--muted);padding:32px 0;">Your shopping cart is empty.</div>`;
+      } else {
+        wrap.innerHTML = cart.map((i) => {
+          const fallback = makeSvgThumb(i.name);
+          return `
+            <div class="cart-item">
+              <img src="${i.img}" alt="${i.name}" onerror="this.onerror=null;this.src='${fallback}'" />
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:700;">${i.name}</div>
+                <div style="font-size:12px;color:var(--muted);">₹${i.price.toLocaleString("en-IN")} × ${i.qty}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn btn-outline btn-sm" onclick="changeQty(${i.id},-1)">-</button>
+                <span style="font-size:13px;font-weight:700;">${i.qty}</span>
+                <button class="btn btn-outline btn-sm" onclick="changeQty(${i.id},1)">+</button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+      const t = getCartTotals();
+      document.getElementById("cartTotals").innerHTML = `
+        <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>₹${t.subtotal.toLocaleString("en-IN")}</span></div>
+        ${t.discount ? `<div style="display:flex;justify-content:space-between;color:var(--success);"><span>Discount</span><span>-₹${t.discount.toLocaleString("en-IN")}</span></div>` : ""}
+        <div style="display:flex;justify-content:space-between;"><span>GST (18%)</span><span>₹${t.gst.toLocaleString("en-IN")}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>Shipping</span><span>${t.shipping === 0 ? "FREE" : "₹" + t.shipping}</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;border-top:1px solid var(--border);padding-top:6px;">
+          <span>Total</span><span>₹${t.total.toLocaleString("en-IN")}</span>
+        </div>
+      `;
+    }
+
+    function toggleCart(open) {
+      renderCart();
+      document.getElementById("cartBackdrop").classList.toggle("open", open);
+    }
+
+    function openCheckoutModal() {
+      if (cart.length === 0) return showToast("Add products to your cart first.");
+      if (currentUser) {
+        document.getElementById("chkName").value = currentUser.name || "";
+        document.getElementById("chkEmail").value = currentUser.email || "";
+        document.getElementById("chkMobile").value = currentUser.phone || "";
+      }
+      const t = getCartTotals();
+      document.getElementById("checkoutSummary").innerHTML = `
+        <strong>Order Summary:</strong> ${cart.reduce((s, i) => s + i.qty, 0)} item(s) ·
+        Payable Total: <strong>₹${t.total.toLocaleString("en-IN")}</strong> (incl. GST &amp; Shipping)
+      `;
+      toggleCart(false);
+      document.getElementById("checkoutModal").classList.add("open");
+    }
+    function closeCheckoutModal() { document.getElementById("checkoutModal").classList.remove("open"); }
+
+    async function submitCheckout(e) {
+      e.preventDefault();
+      const t = getCartTotals();
+      const orderNum = "NTF-ORD-" + new Date().getFullYear() + "-" + Math.floor(10000 + Math.random() * 89999);
+      const customer = {
+        name: document.getElementById("chkName").value.trim(),
+        email: document.getElementById("chkEmail").value.trim(),
+        mobile: document.getElementById("chkMobile").value.trim(),
+        pin: document.getElementById("chkPin").value.trim(),
+        address: document.getElementById("chkAddress").value.trim(),
+        city: document.getElementById("chkCity").value.trim(),
+        state: document.getElementById("chkState").value.trim()
+      };
+
+      const finalizeOrder = (paymentStatus, paymentId = "") => {
+        const record = {
+          orderNumber: orderNum, customer, items: [...cart], totals: t,
+          paymentStatus, razorpayPaymentId: paymentId, orderStatus: "Order Placed",
+          createdAt: new Date().toLocaleString()
+        };
+        orders.unshift(record);
+        localStorage.setItem("ntf_standalone_orders", JSON.stringify(orders));
+        cart = [];
+        saveCart();
+        renderCart();
+        closeCheckoutModal();
+        document.getElementById("trackOrderId").value = orderNum;
+        showOrderResult(record);
+        showToast(`Order ${orderNum} confirmed!`);
+      };
+
+      // Use Razorpay Checkout when Razorpay Public Key is configured
+      if (window.Razorpay && RAZORPAY_PUBLIC_KEY) {
+        const rzp = new window.Razorpay({
+          key: RAZORPAY_PUBLIC_KEY,
+          amount: t.total * 100,
+          currency: "INR",
+          name: "NEXUSTEKFUSION PRIVATE LIMITED",
+          description: `Store Order ${orderNum}`,
+          prefill: { name: customer.name, email: customer.email, contact: customer.mobile },
+          handler: (resp) => finalizeOrder("Paid", resp.razorpay_payment_id || ""),
+          theme: { color: "#1d4ed8" }
+        });
+        rzp.open();
+      } else {
+        finalizeOrder("Order Confirmed");
+      }
+    }
+
+    function showOrderResult(record) {
+      document.getElementById("trackResult").innerHTML = `
+        <div style="padding:12px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;margin-top:6px;">
+          <div><strong>Order:</strong> ${record.orderNumber}</div>
+          <div><strong>Status:</strong> ${record.orderStatus} · <strong>Payment:</strong> ${record.paymentStatus}</div>
+          <div><strong>Total:</strong> ₹${record.totals.total.toLocaleString("en-IN")} · <strong>Recipient:</strong> ${record.customer.name}</div>
+        </div>
+      `;
+    }
+
+    function handleTrackOrder(e) {
+      e.preventDefault();
+      const id = document.getElementById("trackOrderId").value.trim().toUpperCase();
+      const found = orders.find((o) => o.orderNumber.toUpperCase() === id);
+      if (!found) {
+        document.getElementById("trackResult").innerHTML = `<div style="color:var(--danger);margin-top:6px;">Order not found locally. Contact info@nexustekfusion.in for dispatch tracking.</div>`;
+        return;
+      }
+      showOrderResult(found);
+    }
+
+    async function handleContactSubmit(e) {
+      e.preventDefault();
+      const payload = {
+        ticket_number: "NTF-TKT-" + Math.floor(10000 + Math.random() * 89999),
+        name: document.getElementById("cName").value.trim(),
+        email: document.getElementById("cEmail").value.trim(),
+        mobile: document.getElementById("cPhone").value.trim(),
+        category: document.getElementById("cCat").value,
+        subject: document.getElementById("cCat").value,
+        message: document.getElementById("cMsg").value.trim(),
+        status: "Open"
+      };
+      if (supabaseClient) {
+        await supabaseClient.from("contact_enquiries").insert(payload).catch(() => {});
+      }
+      e.target.reset();
+      showToast(`Support ticket ${payload.ticket_number} submitted. Support: info@nexustekfusion.in`);
+    }
+
+    // Normal Account Sign-In / Registration (No OTP gates)
+    function updateAuthUI() {
+      const btn = document.getElementById("authBtn");
+      btn.textContent = currentUser ? `${currentUser.name || currentUser.email} (Sign Out)` : "Sign In";
+    }
+    function openAuthModal() {
+      if (currentUser) {
+        currentUser = null;
+        localStorage.removeItem("ntf_standalone_user");
+        updateAuthUI();
+        showToast("Signed out.");
+        return;
+      }
+      document.getElementById("authModal").classList.add("open");
+    }
+    function closeAuthModal() { document.getElementById("authModal").classList.remove("open"); }
+    function switchAuthTab(tab) {
+      authTab = tab;
+      document.getElementById("regOnlyFields").style.display = tab === "register" ? "grid" : "none";
+      document.getElementById("authTitle").textContent = tab === "register" ? "Create Customer Account" : "Customer Sign In";
+      document.getElementById("authSubmitBtn").textContent = tab === "register" ? "Create Account" : "Sign In";
+      document.getElementById("tabLoginBtn").className = `btn btn-sm ${tab === "login" ? "btn-navy" : "btn-outline"}`;
+      document.getElementById("tabRegBtn").className = `btn btn-sm ${tab === "register" ? "btn-navy" : "btn-outline"}`;
+    }
+    function submitAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById("authEmail").value.trim();
+      const name = document.getElementById("authName").value.trim() || email.split("@")[0];
+      const phone = document.getElementById("authPhone").value.trim();
+      currentUser = { email, name, phone };
+      localStorage.setItem("ntf_standalone_user", JSON.stringify(currentUser));
+      updateAuthUI();
+      closeAuthModal();
+      showToast(`Welcome, ${name}!`);
+    }
+
+    // Initialize
+    renderCategories();
+    renderProducts();
+    saveCart();
+    updateAuthUI();
+  </script>
+</body>
+</html>

@@ -1,0 +1,932 @@
+# ADDITIONAL MODULE: FARMER & DRONE PILOT APPROVAL, LIVE GPS TRACKING, OPERATION MONITORING, PAYMENTS, PENALTIES AND PAYOUT MANAGEMENT
+
+Implement a complete Farmer and Drone Pilot Management System for **KRASHIVANTRI by NEXUSTEKFUSION PRIVATE LIMITED**.
+
+This module must be fully integrated with:
+
+- Farmer Android Application.
+- Drone Pilot Android Application.
+- Admin Dashboard.
+- Order and Booking Management.
+- GPS and Live Location Tracking.
+- Drone Spraying Operation Monitoring.
+- Payment Collection and Verification.
+- Pilot and Farmer Payment Management.
+- Penalties, Refunds and Disputes.
+- Notifications and Reports.
+- Supabase Backend.
+
+The system must use actual backend data and real Android GPS capabilities. Do not create a static demonstration or simulated GPS tracking.
+
+## 1. FARMER REGISTRATION AND ADMIN APPROVAL
+
+When a farmer registers through the Android application, collect:
+
+- Full name.
+- Mobile number and OTP verification.
+- Email address (optional or configurable).
+- Profile photograph.
+- State, district, tehsil and village.
+- Complete farm address.
+- Farm location using GPS.
+- Farm boundary or field polygon on the map.
+- Total agricultural land area in acres/hectares.
+- Preferred language.
+- Bank details only when required for a legitimate refund or farmer payment.
+- Required identity or verification documents, where legally appropriate.
+
+Create farmer verification statuses:
+
+1. Registration Submitted.
+2. Mobile Verification Pending.
+3. Documents Under Review.
+4. Approved.
+5. Rejected.
+6. Additional Information Required.
+7. Suspended.
+8. Blocked.
+
+### Admin approval panel
+
+Create:
+
+`/admin/farmers`
+
+Admin must be able to:
+
+- View all registered farmers.
+- View farmer profile and registration date.
+- View submitted documents.
+- View farm location on an interactive map.
+- Verify mobile number and identity documents.
+- Approve or reject registrations.
+- Request additional information.
+- Suspend or reactivate an account.
+- Add internal notes.
+- View farmer booking history.
+- View payment and refund history.
+- View complaints and disputes.
+- View farmer activity and notifications.
+
+A farmer must not be allowed to access restricted booking and payment operations until the required account approval is complete.
+
+Notify the farmer when their account is approved, rejected or requires additional information.
+
+## 2. DRONE PILOT REGISTRATION AND ADMIN APPROVAL
+
+Create a dedicated Drone Pilot registration and verification workflow in the Android application.
+
+Collect:
+
+- Full legal name.
+- Mobile number and OTP verification.
+- Email.
+- Profile photograph.
+- Current residential address.
+- State, district, tehsil and service area.
+- GPS-based operating location.
+- Drone pilot licence or Remote Pilot Certificate details, where applicable.
+- DGCA-related documents and authorisations, where applicable.
+- Aadhaar or other identity verification only where legally appropriate and securely handled.
+- Bank account details.
+- Account holder name.
+- IFSC.
+- Bank verification status.
+- Drone details.
+- Drone model and serial number.
+- Drone registration/UIN details, where applicable.
+- Drone specifications and payload capacity.
+- Insurance details, where applicable.
+- Equipment photographs.
+- Experience and previous work.
+- Supported services and crop types.
+- Service radius.
+- Availability schedule.
+- Emergency contact details.
+
+Do not treat an uploaded licence or document as verified until the authorized admin has reviewed it.
+
+### Drone pilot approval statuses
+
+- Registration Submitted.
+- Mobile Verification Pending.
+- Documents Pending.
+- Technical Verification.
+- Bank Verification Pending.
+- Admin Review.
+- Approved.
+- Rejected.
+- Additional Information Required.
+- Suspended.
+- Blocked.
+
+### Admin panel
+
+Create:
+
+`/admin/drone-pilots`
+
+Admin must be able to:
+
+- View every registered drone pilot.
+- Verify identity and documents.
+- Verify pilot credentials and drone details.
+- Review drone photographs and specifications.
+- Review service area and availability.
+- Verify bank details through a supported verification provider.
+- Approve or reject the pilot.
+- Set pilot service permissions.
+- Assign operational zones.
+- Set maximum service radius.
+- Set booking eligibility.
+- Suspend or reactivate pilots.
+- Review customer ratings and complaints.
+- View completed, cancelled and disputed orders.
+- View GPS history for authorized operational purposes.
+- View earnings, deductions, penalties and payouts.
+- Maintain an internal verification history.
+
+Only approved and eligible drone pilots should receive and accept operational bookings.
+
+## 3. FARMER ORDER AND DRONE PILOT ASSIGNMENT
+
+Create a complete booking-to-assignment workflow.
+
+Farmer selects:
+
+- Service type: Agricultural spraying, crop monitoring, field survey or other admin-configured services.
+- Crop type.
+- Farm location.
+- Farm boundary or field polygon.
+- Total area in acres/hectares.
+- Preferred date and time.
+- Required service.
+- Additional instructions.
+- Images or documents, if required.
+
+The system calculates the estimated booking price using admin-configured pricing rules.
+
+For example:
+
+Service charge = approved price per acre × verified service area.
+
+The farmer reviews the booking and confirms it.
+
+### Order statuses
+
+- Booking Submitted.
+- Awaiting Admin Review (if configured).
+- Awaiting Pilot Assignment.
+- Pilot Assigned.
+- Pilot Accepted.
+- Pilot Rejected.
+- Pilot En Route.
+- Pilot Arrived.
+- Operation Started.
+- Operation In Progress.
+- Operation Paused.
+- Operation Completed.
+- Awaiting Verification.
+- Completed and Verified.
+- Payment Pending.
+- Payment Settled.
+- Cancelled.
+- Disputed.
+
+Admin must be able to configure whether bookings are automatically offered to eligible pilots or manually assigned.
+
+### Pilot assignment
+
+Admin must be able to:
+
+- View available approved pilots.
+- View their operational zones.
+- View their current availability.
+- View their last reported location, subject to location permissions and tracking policy.
+- Assign or reassign a pilot.
+- Send booking offers.
+- Set acceptance deadlines.
+- Cancel assignments with a recorded reason.
+- Monitor all active orders.
+
+The pilot Android app must receive a booking notification and display:
+
+- Order ID.
+- Farmer name and contact permissions.
+- Farm location.
+- Distance to the farm.
+- Service type.
+- Area in acres.
+- Expected payment/earning.
+- Scheduled time.
+- Special instructions.
+
+Pilot actions:
+
+- Accept Booking.
+- Reject Booking.
+- View Navigation.
+- Start Travel.
+- Mark Arrived.
+- Start Operation.
+- Pause Operation.
+- Resume Operation.
+- Complete Operation.
+- Submit Work Report.
+
+Record timestamps and the user responsible for each status change.
+
+## 4. REAL-TIME GPS LOCATION TRACKING
+
+Implement actual GPS tracking using Android location services and a secure real-time backend.
+
+This is a critical feature.
+
+### Farmer application
+
+For an active order, display:
+
+- Farmer's registered farm location.
+- Farm boundary polygon.
+- Assigned drone pilot's live or most recently reported location.
+- Pilot's route towards the farm, when location sharing is active.
+- Estimated distance and ETA, only when calculated from actual location and routing data.
+- Pilot arrival status.
+- Operation status.
+- Last location update time.
+- Map-based tracking.
+
+Use OpenStreetMap-compatible mapping technology such as MapLibre with a suitable routing provider.
+
+### Drone pilot application
+
+Use Android GPS to share the pilot's operational location while:
+
+- The pilot is online and has explicitly enabled availability/location sharing.
+- The pilot has accepted an active booking.
+- The pilot is travelling to the assigned farm.
+- The pilot is carrying out the assigned operation.
+
+The pilot must be able to see:
+
+- Farmer's farm location.
+- Farm polygon.
+- Navigation route.
+- Their own GPS location.
+- Booking status.
+- GPS signal status.
+- Last successful location upload.
+
+### Admin live tracking dashboard
+
+Create:
+
+`/admin/live-tracking`
+
+Display an interactive map with:
+
+- All pilots currently sharing operational locations.
+- Active bookings.
+- Assigned farmers' farm locations.
+- Pilot movement towards assigned farms.
+- Pilots currently operating.
+- Pilots who have completed operations.
+- Last GPS update timestamp.
+- GPS accuracy.
+- Location-sharing status.
+- Current order ID.
+- Pilot ID.
+- Farmer ID.
+
+Provide filters:
+
+- All pilots.
+- Online pilots.
+- Offline pilots.
+- Available pilots.
+- Busy pilots.
+- En Route.
+- Arrived.
+- Operation in Progress.
+- Operation Completed.
+- GPS Signal Lost.
+- Date and time.
+- District and service area.
+
+Admin can select a pilot to view their operational tracking details and authorized location history.
+
+### GPS tracking requirements
+
+- Use Android Fused Location Provider where supported.
+- Implement a foreground location service with a visible notification when background location tracking is required.
+- Request the appropriate Android location permissions.
+- Explain why location is needed before requesting permission.
+- Handle permission denial, GPS disabled and battery restrictions.
+- Upload location updates at an admin-configurable interval, balancing tracking accuracy and battery consumption.
+- Use secure authenticated API calls.
+- Store latitude, longitude, accuracy, speed, heading, timestamp and associated order ID.
+- Detect stale location updates.
+- Display GPS accuracy and last updated time.
+- Do not fabricate or interpolate locations and present them as actual GPS readings.
+- Handle offline periods and synchronize valid buffered updates when connectivity returns.
+- Protect location data with access controls and retention policies.
+
+**Privacy and authorization rule:** Do not implement covert or unrestricted employee tracking. Location sharing must be disclosed and permission-based. Limit tracking to the pilot's authorized availability and active operational periods. Allow the pilot to see when tracking is active. Admin access and location history must be role-controlled and audit-logged. Follow applicable Indian privacy and data-protection requirements.
+
+## 5. FARM BOUNDARY AND SPRAYING OPERATION VERIFICATION
+
+The system must verify whether the pilot actually reaches the assigned farm and completes the booked operation.
+
+### Farm geofencing
+
+- Save the farmer's approved farm polygon.
+- Display the polygon on the map.
+- Compare pilot GPS coordinates with the farm boundary.
+- Detect when the pilot enters or exits the operational area.
+- Record arrival time and departure time.
+- Show whether the pilot is within or outside the farm boundary.
+- Flag location mismatches for admin review.
+
+GPS geofencing is an operational indicator, not conclusive proof that spraying was performed.
+
+### Spraying operation workflow
+
+Before starting:
+
+1. Pilot reaches the farm.
+2. Pilot confirms the correct order.
+3. Pilot checks the farm location and area.
+4. Pilot confirms drone and equipment readiness.
+5. Pilot uploads required pre-operation photographs.
+6. Pilot taps Start Operation.
+7. Backend records the start timestamp and GPS location.
+
+During the operation:
+
+- Record operation status.
+- Capture periodic GPS updates.
+- Show operation duration.
+- Record pauses and resume events.
+- Allow the pilot to report weather or equipment problems.
+- Allow the pilot to report partial completion.
+- Record actual completed area separately from booked area.
+- Record any operational incident.
+
+After the operation:
+
+1. Pilot taps Complete Operation.
+2. Pilot enters actual area covered.
+3. Pilot uploads before/after photographs or videos.
+4. Pilot submits operation notes.
+5. Pilot confirms any unused or additional material information, if relevant.
+6. System records completion time and final GPS location.
+7. Order changes to Awaiting Verification.
+8. Farmer receives a completion notification.
+9. Farmer can confirm completion or raise a complaint.
+10. Admin can review the submitted evidence and approve the operation.
+
+### Operation completion verification
+
+Create a verification panel showing:
+
+- Booked area.
+- Actual reported area.
+- Farm polygon.
+- Pilot GPS trail.
+- Start location and timestamp.
+- Completion location and timestamp.
+- Total operation duration.
+- Before/after evidence.
+- Pilot report.
+- Farmer confirmation.
+- GPS anomalies.
+- Admin verification decision.
+
+Admin actions:
+
+- Approve Operation.
+- Reject Operation.
+- Request Additional Evidence.
+- Mark Partially Completed.
+- Approve Revised Area.
+- Initiate Dispute Review.
+
+Never automatically mark an operation as successfully completed solely because the pilot pressed the Complete button.
+
+Where supported by the hardware, allow future integration with drone telemetry, flight-controller logs, spray flow sensors and application-rate data. Clearly distinguish actual sensor telemetry from manually entered pilot information.
+
+## 6. FARMER PAYMENT MANAGEMENT
+
+Create:
+
+`/admin/farmer-payments`
+
+Integrate Razorpay for online farmer payments where enabled.
+
+Support:
+
+- Booking advance.
+- Full booking payment.
+- Remaining booking balance.
+- Additional approved service charges.
+- Refunds.
+- Payment failures.
+- Payment disputes.
+
+Admin must be able to configure:
+
+- Service pricing.
+- Per-acre rates.
+- Minimum booking charges.
+- Advance percentage.
+- Full payment requirement.
+- Payment due dates.
+- Cancellation charges.
+- Refund policy.
+- Applicable taxes.
+- Coupon and discount rules.
+
+### Farmer payment statuses
+
+- Payment Not Required.
+- Payment Pending.
+- Payment Initiated.
+- Payment Successful.
+- Payment Verification Pending.
+- Paid.
+- Partially Paid.
+- Refund Pending.
+- Partially Refunded.
+- Fully Refunded.
+- Payment Failed.
+- Disputed.
+
+Verify every payment on the backend using Razorpay signature verification and webhooks.
+
+Do not consider a frontend success message sufficient proof of payment.
+
+Provide farmers with:
+
+- Payment history.
+- Booking-wise payments.
+- Downloadable receipts.
+- Refund status.
+- Transaction references.
+- Outstanding amount.
+- Support and dispute options.
+
+## 7. DRONE PILOT EARNINGS AND PAYOUT MANAGEMENT
+
+Create:
+
+`/admin/pilot-payouts`
+
+Create an individual earnings dashboard in the Drone Pilot Android application.
+
+The system must calculate pilot earnings from approved and verified operations.
+
+Example:
+
+- Farmer booking amount: ₹450 per acre.
+- Verified area: 5 acres.
+- Gross service amount: ₹2,250.
+- Pilot share: Admin-configured percentage or fixed amount.
+- Platform/company commission: Admin-configured percentage or fixed amount.
+- Applicable deductions: Only approved and documented deductions.
+- Net pilot payable: Calculated from the approved settlement.
+
+Do not hardcode a commission percentage. The Super Admin must configure the commercial arrangement.
+
+### Pilot earnings dashboard
+
+Display:
+
+- Today's earnings.
+- This week's earnings.
+- This month's earnings.
+- Lifetime earnings.
+- Completed orders.
+- Pending verification.
+- Pending settlement.
+- Approved payout.
+- Paid payout.
+- Deductions.
+- Penalties.
+- Refund-related adjustments.
+- Downloadable earnings statement.
+
+### Payout workflow
+
+1. Pilot completes the operation.
+2. Farmer confirms completion or admin verifies the operation.
+3. System calculates the eligible pilot earning.
+4. Settlement is placed in Pending Approval.
+5. Admin reviews the settlement.
+6. Admin approves, rejects or requests correction.
+7. Approved amount enters Payable Balance.
+8. Admin initiates payout using a supported bank payout provider or verified bank transfer process.
+9. Backend records the payout reference.
+10. Pilot receives a payout notification.
+11. Pilot can download the payout statement.
+
+### Payout statuses
+
+- Not Eligible.
+- Pending Operation Verification.
+- Pending Settlement.
+- Awaiting Admin Approval.
+- Approved.
+- Payout Processing.
+- Paid.
+- Failed.
+- Reversed.
+- On Hold.
+- Disputed.
+
+Store:
+
+- Pilot ID.
+- Order ID.
+- Gross amount.
+- Commission.
+- Approved deductions.
+- Net payable.
+- Payout method.
+- Bank account reference.
+- Payout provider reference.
+- Internal payout ID.
+- Transaction date.
+- Payout status.
+- Admin approver.
+- Failure reason.
+
+Never display a payout as successful until the bank or payout provider confirms it.
+
+Do not expose full bank account details in the admin interface. Mask sensitive information and restrict access.
+
+## 8. PENALTY AND DISCIPLINARY MANAGEMENT
+
+Create:
+
+`/admin/penalties`
+
+Admin must be able to configure penalties for both farmers and drone pilots.
+
+Penalties must be based on documented rules, evidence and a fair review process. Do not automatically deduct money merely because a GPS signal was lost or a customer made an unverified complaint.
+
+### Possible pilot penalty categories
+
+- Accepting a booking and not attending without a valid reason.
+- Repeated unjustified booking cancellations.
+- Deliberately reporting false completion.
+- Submitting fraudulent operation evidence.
+- Unauthorized changes to the assigned farm or order.
+- Proven damage caused by negligence.
+- Proven violation of agreed service conditions.
+- Repeated failure to follow safety procedures.
+
+### Possible farmer penalty categories
+
+- Repeated last-minute cancellation after a pilot has travelled, where the disclosed cancellation policy applies.
+- Providing deliberately incorrect farm location or area.
+- Abusive or threatening conduct.
+- Proven fraudulent payment or refund claims.
+- Repeated unjustified no-show situations.
+
+### Penalty workflow
+
+1. Admin or authorized staff records an incident.
+2. Select affected user and order.
+3. Select penalty category.
+4. Enter explanation and supporting evidence.
+5. Enter proposed penalty amount or action.
+6. Notify the affected user.
+7. Allow the user to submit an explanation or appeal.
+8. Admin reviews the appeal.
+9. Authorized admin approves, modifies or cancels the penalty.
+10. Store the final decision and audit record.
+
+### Penalty statuses
+
+- Draft.
+- Under Review.
+- Awaiting User Response.
+- Appeal Submitted.
+- Approved.
+- Rejected.
+- Waived.
+- Reversed.
+- Settled.
+
+Penalty amounts must be configurable and subject to applicable laws and disclosed contractual terms.
+
+A penalty must not be deducted from a pilot's earnings or a farmer's refund until it is approved and legally permissible. Maintain a separate ledger entry for every deduction and reversal.
+
+## 9. ADMIN PAYMENT APPROVAL AND FINANCIAL CONTROL
+
+Create a consolidated financial control panel:
+
+`/admin/finance`
+
+Include separate sections:
+
+- Farmer Payments.
+- Pilot Earnings.
+- Pilot Payouts.
+- Penalties.
+- Refunds.
+- Disputes.
+- Platform Commission.
+- Settlement History.
+- Financial Reports.
+
+### Admin permissions
+
+Super Admin can:
+
+- Configure payment rules.
+- Configure pilot commission and earnings.
+- Approve or reject settlements.
+- Approve payouts.
+- Place payouts on hold with a reason.
+- Review payment failures.
+- Approve refunds.
+- Review penalties and appeals.
+- Reverse incorrect settlement entries through documented adjustment transactions.
+- Export financial reports.
+
+Accounts Manager can receive limited financial permissions.
+
+Other admin roles must only access the financial actions explicitly granted to them.
+
+Require a reason for financial overrides and maintain a complete audit trail.
+
+## 10. REAL-TIME ADMIN ORDER MONITORING
+
+Create:
+
+`/admin/orders/live`
+
+Provide an operational dashboard containing:
+
+- Total active orders.
+- Orders awaiting pilot assignment.
+- Orders accepted.
+- Pilots travelling.
+- Pilots arrived.
+- Spraying operations in progress.
+- Paused operations.
+- Completed operations awaiting verification.
+- Disputed orders.
+- Cancelled orders.
+
+For each order show:
+
+- Order ID.
+- Farmer.
+- Assigned pilot.
+- Farm location.
+- Booked area.
+- Reported completed area.
+- Booking amount.
+- Payment status.
+- Pilot earning estimate.
+- Current order status.
+- Last GPS update.
+- Operation start and end time.
+- Verification status.
+
+Admin must be able to open the order and see its complete operational timeline, GPS records, uploaded evidence, payments, settlements, penalties and customer communications.
+
+## 11. ANDROID APPLICATION REQUIREMENTS
+
+### Farmer Android app
+
+Add:
+
+- Registration and approval status.
+- Farmer profile and farm verification.
+- Farm boundary selection.
+- Booking and order tracking.
+- Live pilot location map.
+- Pilot arrival notifications.
+- Operation progress.
+- Before/after operation evidence.
+- Payment and receipt history.
+- Refund requests.
+- Complaints and disputes.
+- Service ratings and feedback.
+
+### Drone Pilot Android app
+
+Add:
+
+- Registration and document verification.
+- Approval status.
+- Online/offline availability.
+- Location-sharing controls.
+- Booking offers.
+- Accept/reject booking.
+- Farmer farm location and navigation.
+- Active order GPS tracking.
+- Arrival confirmation.
+- Operation start/pause/resume/complete.
+- Photo and video evidence uploads.
+- Completed area reporting.
+- Earnings dashboard.
+- Payout history.
+- Penalty notifications.
+- Appeal submission.
+- Support and incident reporting.
+
+Use native Android location APIs and a reliable background location service where needed. Handle Android lifecycle, battery optimization, permission changes, network loss and application restarts.
+
+The pilot must always be informed when location sharing is active.
+
+## 12. DATABASE AND BACKEND REQUIREMENTS
+
+Create or update the following Supabase PostgreSQL tables:
+
+- farmers.
+- farmer_verifications.
+- farmer_documents.
+- farmer_farms.
+- farm_boundaries.
+- drone_pilots.
+- pilot_verifications.
+- pilot_documents.
+- pilot_bank_accounts.
+- pilot_drones.
+- pilot_service_areas.
+- pilot_availability.
+- pilot_location_sessions.
+- pilot_location_updates.
+- service_bookings.
+- booking_assignments.
+- booking_status_history.
+- operation_sessions.
+- operation_location_logs.
+- operation_evidence.
+- operation_verifications.
+- farmer_payments.
+- farmer_refunds.
+- pilot_earning_ledger.
+- pilot_settlements.
+- pilot_payouts.
+- penalties.
+- penalty_appeals.
+- financial_adjustments.
+- payment_webhook_events.
+- user_notifications.
+- admin_audit_logs.
+
+Use:
+
+- Supabase Authentication.
+- PostgreSQL.
+- Supabase Realtime for authorized live updates.
+- Supabase Storage for private documents and operation evidence.
+- Secure server-side APIs or Edge Functions.
+- Row Level Security on every sensitive table.
+- Role-based permissions.
+- Database transactions.
+- Unique constraints.
+- Idempotent payment webhooks.
+- Immutable financial transaction records.
+
+Farmers must only access their own profiles, farms, orders, payments and documents.
+
+Pilots must only access their own profile, approved assignments, permitted farmer/order information, location records, earnings and payouts.
+
+Admins must access data according to assigned permissions.
+
+Never expose Supabase service-role keys, Razorpay secrets, bank credentials or unrestricted location data in the Android application or frontend code.
+
+## 13. NOTIFICATIONS AND AUTOMATION
+
+Send in-app notifications and configured email/SMS/push notifications for:
+
+**Farmer:**
+- Registration received.
+- Account approved or rejected.
+- Booking confirmed.
+- Pilot assigned.
+- Pilot accepted.
+- Pilot approaching.
+- Pilot arrived.
+- Operation started.
+- Operation paused.
+- Operation completed.
+- Payment request.
+- Payment received.
+- Refund update.
+- Dispute update.
+
+**Drone Pilot:**
+- Registration approved or rejected.
+- New booking offer.
+- Booking accepted or reassigned.
+- Farmer location and job details.
+- Operation reminders.
+- Operation verification result.
+- Earnings approved.
+- Payout processing.
+- Payout completed or failed.
+- Penalty notification.
+- Appeal decision.
+
+**Admin:**
+- New farmer registration.
+- New pilot registration.
+- Documents awaiting review.
+- New booking.
+- Unaccepted booking.
+- GPS signal loss during active operation.
+- Location outside expected operational area.
+- Operation completion submitted.
+- Customer complaint.
+- Payment failure.
+- Settlement awaiting approval.
+- Payout awaiting approval.
+- Penalty appeal submitted.
+
+Do not claim that a notification, email, payout or payment succeeded unless the relevant provider or backend confirms it.
+
+## 14. REPORTS AND ANALYTICS
+
+Create reports for:
+
+- Total registered farmers.
+- Approved and pending farmers.
+- Total registered pilots.
+- Approved and pending pilots.
+- Active pilots.
+- Total bookings.
+- Completed bookings.
+- Cancelled bookings.
+- Disputed bookings.
+- Total acres serviced.
+- Farmer revenue.
+- Pilot gross earnings.
+- Pilot net payouts.
+- Company commission.
+- Outstanding settlements.
+- Penalties and reversals.
+- Refunds.
+- District-wise and village-wise operations.
+- Pilot performance.
+- Service completion rate.
+
+Allow filters by date, district, farmer, pilot, order, service and payment status.
+
+Support CSV and PDF export.
+
+## 15. REQUIRED END-TO-END TESTING
+
+Test the complete workflow using real backend data and Razorpay test mode where applicable.
+
+1. Farmer registers.
+2. Admin reviews and approves farmer.
+3. Drone pilot registers.
+4. Admin verifies documents and approves pilot.
+5. Farmer creates a spraying booking for a defined farm area.
+6. System records farm GPS location and polygon.
+7. Admin assigns an approved pilot.
+8. Pilot receives and accepts the booking.
+9. Pilot starts authorized location sharing.
+10. Farmer and admin see the pilot's actual GPS location.
+11. Pilot travels to the farm.
+12. System records farm arrival.
+13. Pilot starts the spraying operation.
+14. System records operation start and GPS updates.
+15. Pilot pauses or resumes the operation if required.
+16. Pilot submits actual completed area and evidence.
+17. Farmer confirms the operation or raises a complaint.
+18. Admin reviews and verifies completion.
+19. System calculates pilot earnings and company commission.
+20. Settlement enters admin approval.
+21. Admin approves the pilot payout.
+22. Payout provider or bank transfer confirms the payout.
+23. Pilot sees the confirmed payout in the app.
+24. If an incident occurs, admin can create a penalty and the affected user can appeal.
+25. Admin reviews and records the final penalty decision.
+
+Test GPS permission denial, GPS disabled, inaccurate GPS, lost network, offline synchronization, duplicate payment webhooks, failed payouts, partial operation completion, disputed orders and cancelled bookings.
+
+## FINAL BUSINESS RULES
+
+1. No unapproved farmer or drone pilot may access restricted operational features.
+2. Only approved and eligible pilots can receive operational bookings.
+3. Farmer and pilot accounts must be independently verified.
+4. Live GPS tracking must use actual Android device location and be permission-based, disclosed and restricted to authorized operational periods.
+5. Every active order must have an auditable status timeline.
+6. Spraying completion must require operation evidence and the configured verification process.
+7. GPS presence alone is not proof of spraying completion.
+8. Farmer payments must be verified by the backend.
+9. Pilot earnings must be calculated from verified bookings and approved settlement rules.
+10. Payouts must not be marked successful until confirmed by the payout provider or verified bank process.
+11. Penalties must have a documented reason, review process and appeal mechanism.
+12. Financial changes must be auditable and must never silently overwrite historical transactions.
+13. Super Admin must control pricing, commissions, verification rules, settlement rules, penalties, permissions and operational settings.
+14. The farmer app, pilot app and admin dashboard must share the same secure backend and consistent live order data.
+15. Build this as a production-ready functional system, not merely a UI prototype.

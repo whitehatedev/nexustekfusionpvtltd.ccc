@@ -1,0 +1,6 @@
+{
+  "name": "NexusTekFusion",
+  "description": "Precision agricultural drone hardware (KRASHIVANTRI), FPV & UAV components, IoT field telemetry, custom 3D printing, and engineering project platform for Farmers, Pilots & Buyers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

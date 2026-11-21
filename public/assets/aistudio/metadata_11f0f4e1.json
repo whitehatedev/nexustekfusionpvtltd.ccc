@@ -1,0 +1,6 @@
+{
+  "name": "NexustekFusion",
+  "description": "Precision agricultural drone hardware, IoT field telemetry, and unified Farmer, Pilot & Buyer ecosystem with Super Admin CMS and commerce operations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

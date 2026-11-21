@@ -1,0 +1,1654 @@
+# MASTER DEVELOPMENT PROMPT
+# NEXUSTEKFUSION PRIVATE LIMITED – COMPLETE BUSINESS WEBSITE, E-COMMERCE & ENGINEERING SERVICE PLATFORM
+
+Act as a senior full-stack software architect, UI/UX designer, e-commerce developer, database engineer, cybersecurity specialist and technology product developer.
+
+Your task is to DESIGN, DEVELOP AND IMPLEMENT a complete, production-ready business website and online engineering service platform for:
+
+**NEXUSTEKFUSION PRIVATE LIMITED**
+
+Company website: https://nexustekfusion.in
+
+Tagline: Transforming Ideas into Reality | Engineering the Future with Intelligence
+
+Location: Nagpur, Maharashtra, India.
+
+The website must represent a professional engineering, technology, innovation, manufacturing, product development and e-commerce company.
+
+Do not create only a landing page, static HTML website or frontend demo. Build a complete working full-stack platform with customer accounts, backend database, admin dashboard, product inventory, enquiries, quotations, payments, order management, delivery management and content management.
+
+The platform must be scalable, secure, mobile-responsive and ready for future expansion.
+
+---
+
+# PART 1 – COMPANY BRANDING AND IDENTITY
+
+Use the following official company information throughout the website.
+
+Company name: NEXUSTEKFUSION PRIVATE LIMITED
+
+Brand name: NexusTekFusion
+
+Established: 2026
+
+Founder and CEO: Sahil Prakash Bhagat
+
+Email: info@nexustekfusion.in
+
+Website: nexustekfusion.in
+
+Registered/business address:
+
+H NO. 565/19 NIT, SANKUL NEW COTTON MARK, Ganjipeth, Nagpur 440018, Maharashtra, India.
+
+CIN: U30305ME2026PTC474052
+
+Primary tagline:
+"Transforming Ideas into Reality"
+
+Secondary tagline:
+"Engineering the Future with Intelligence"
+
+Company introduction:
+
+NexusTekFusion Private Limited is an engineering, technology development and innovation company based in Nagpur, Maharashtra. The company specializes in AI and machine learning, agricultural drones, robotics, IoT, embedded systems, automation, PCB design, 3D printing, rapid prototyping, engineering project development and customized hardware and software solutions.
+
+The company focuses on converting innovative concepts into practical products through engineering, research, design, development, prototyping and manufacturing.
+
+Core technologies:
+- Artificial Intelligence and Machine Learning.
+- Agricultural Drones and Drone Technology.
+- Robotics and Autonomous Systems.
+- IoT and Smart Devices.
+- Embedded Systems.
+- PCB Design and Electronics.
+- 3D Printing and Rapid Prototyping.
+- Industrial Automation.
+- Product Design and Development.
+- Engineering Research and Development.
+
+Do not invent GST numbers, certifications, awards, client names, testimonials, production capacity or company achievements. Make these fields editable through the admin dashboard.
+
+---
+
+# PART 2 – WEBSITE DESIGN AND USER EXPERIENCE
+
+Create a premium technology-company design inspired by modern engineering companies, professional B2B platforms and modern e-commerce websites.
+
+Design requirements:
+- Premium, modern and professional.
+- Clean typography and clear navigation.
+- Technology-focused visual identity.
+- Professional engineering and product photography.
+- High-quality animations and interactions.
+- Responsive desktop, tablet and mobile layouts.
+- Fast loading and optimized images.
+- Accessible colour contrast and readable text.
+- Consistent buttons, cards, forms and navigation.
+- Professional loading, empty, error and success states.
+
+Use a modern visual theme with:
+- Deep navy / charcoal.
+- White and light grey.
+- Technology blue.
+- Innovation cyan accents.
+- Subtle gradients.
+- Clean engineering-inspired graphics.
+
+Do not overcrowd the website.
+
+Use a consistent design system with reusable components.
+
+The header should contain:
+- Company logo.
+- Home.
+- About.
+- Services.
+- 3D Printing.
+- PCB Services.
+- Projects.
+- Shop.
+- B2B / Bulk Orders.
+- Blogs.
+- Contact.
+- Search.
+- Customer Account.
+- Wishlist.
+- Cart.
+
+Create responsive desktop navigation and a mobile menu.
+
+Add a professional announcement bar that admins can update for offers, new services and announcements.
+
+---
+
+# PART 3 – COMPLETE WEBSITE STRUCTURE
+
+Build the following website pages and routes.
+
+## Main pages
+
+1. `/` – Homepage.
+2. `/about` – About the company.
+3. `/services` – All services.
+4. `/services/ai-ml` – AI and machine learning.
+5. `/services/drone-development` – Drone development.
+6. `/services/robotics` – Robotics.
+7. `/services/iot-embedded` – IoT and embedded systems.
+8. `/services/automation` – Automation.
+9. `/services/pcb-design` – PCB design and development.
+10. `/services/3d-printing` – Custom 3D printing.
+11. `/projects` – Engineering projects and case studies.
+12. `/project-enquiry` – Project enquiry and quotation.
+13. `/shop` – Complete online store.
+14. `/shop/category/[slug]` – Product categories.
+15. `/product/[slug]` – Individual product detail pages.
+16. `/store/3d-printed-products` – 3D printed products.
+17. `/sale` – Offers and discounted products.
+18. `/b2b` – Business and bulk orders.
+19. `/blogs` – Technology and engineering articles.
+20. `/blogs/[slug]` – Individual blog pages.
+21. `/contact` – Contact and enquiry.
+22. `/faq` – Frequently asked questions.
+23. `/shipping-policy` – Shipping policy.
+24. `/return-refund-policy` – Return and refund policy.
+25. `/privacy-policy` – Privacy policy.
+26. `/terms-and-conditions` – Terms and conditions.
+27. `/my-account` – Customer dashboard.
+28. `/cart` – Shopping cart.
+29. `/checkout` – Checkout and payment.
+30. `/track-order` – Order tracking.
+
+All pages must be connected through working navigation and backend functionality.
+
+---
+
+# PART 4 – HOMEPAGE
+
+Create a complete professional homepage.
+
+## Section 1: Hero section
+
+Headline:
+
+"Engineering Innovation. Building the Future."
+
+Supporting text:
+
+"From intelligent systems and advanced robotics to agricultural drones, electronics and rapid prototyping, NexusTekFusion transforms ideas into real-world technology."
+
+Primary CTA:
+"Explore Our Services"
+
+Secondary CTA:
+"Start Your Project"
+
+Add high-quality technology visuals featuring:
+- Agricultural drones.
+- Robotics.
+- 3D printers.
+- Electronics and PCBs.
+- AI and automation.
+- Engineering prototypes.
+
+## Section 2: Company introduction
+
+Introduce NexusTekFusion as an engineering and technology innovation company.
+
+Include:
+- Company overview.
+- Mission.
+- Vision.
+- Engineering capabilities.
+- Innovation approach.
+
+## Section 3: Our services
+
+Create professional service cards for:
+
+1. AI and Machine Learning.
+2. Drone Development.
+3. Robotics and Automation.
+4. IoT and Embedded Systems.
+5. PCB Design and Development.
+6. 3D Printing and Rapid Prototyping.
+7. Engineering Project Development.
+8. Product Design and Manufacturing.
+
+Each card must link to its dedicated service page.
+
+## Section 4: Featured products
+
+Display selected products from the online store.
+
+Include:
+- Product image.
+- Product name.
+- Price.
+- Discount where applicable.
+- Availability.
+- View Details.
+- Add to Cart.
+
+Products must load dynamically from the database.
+
+## Section 5: 3D printing promotion
+
+Headline:
+
+"Turn Your 3D Designs Into Reality."
+
+Allow customers to:
+- Upload 3D models.
+- Select material.
+- Select colour.
+- Configure printing.
+- Receive an estimated quotation.
+- Order online.
+
+CTA: "Upload Your 3D Model"
+
+## Section 6: Engineering project development
+
+Promote final-year engineering projects, mini projects, prototypes, research projects and customized engineering solutions.
+
+CTA: "Submit Project Enquiry"
+
+## Section 7: Featured projects and innovations
+
+Show real projects uploaded by the admin.
+
+Each project should have:
+- Project title.
+- Images and videos.
+- Description.
+- Technology used.
+- Applications.
+- Project outcomes.
+- Related services.
+
+Do not generate fake project achievements.
+
+## Section 8: Why choose NexusTekFusion?
+
+Include:
+- Engineering-focused development.
+- Customized solutions.
+- Hardware and software integration.
+- Prototyping capabilities.
+- Technology-driven innovation.
+- Customer-focused support.
+
+## Section 9: Our process
+
+Display:
+
+Requirement → Research → Design → Development → Prototyping → Testing → Delivery.
+
+## Section 10: Contact CTA
+
+"Have an Idea? Let's Build It Together."
+
+Buttons:
+- Start a Project.
+- Contact Our Team.
+
+## Section 11: Footer
+
+Include:
+- Company details.
+- Main navigation.
+- Services.
+- Shop categories.
+- Customer support.
+- Contact information.
+- Social media links.
+- Legal policies.
+- CIN.
+- Copyright notice.
+
+Make all footer content editable through admin.
+
+---
+
+# PART 5 – ENGINEERING SERVICES
+
+Create individual service pages with complete descriptions, service capabilities, technical information, applications, relevant images and enquiry forms.
+
+## AI and Machine Learning
+
+Include:
+- AI application development.
+- Computer vision.
+- Image processing.
+- Predictive analytics.
+- Object detection.
+- Data analysis.
+- Intelligent automation.
+- Custom AI solutions.
+
+## Drone Development
+
+Include:
+- Agricultural drones.
+- Survey and mapping drones.
+- Custom drone development.
+- Payload integration.
+- Flight controller integration.
+- Drone electronics.
+- UAV prototyping.
+- Drone repair and customization, where offered.
+
+Show the KRASHIVANTRI agricultural drone platform and its products only using verified information entered by the admin.
+
+## Robotics
+
+Include:
+- Autonomous mobile robots.
+- Robotic arms.
+- Industrial robotics.
+- Robotic automation.
+- Sensor integration.
+- Embedded control systems.
+
+## IoT and Embedded Systems
+
+Include:
+- ESP32.
+- Arduino.
+- Raspberry Pi.
+- Sensor integration.
+- Wireless monitoring.
+- IoT dashboards.
+- Embedded firmware.
+- Smart monitoring systems.
+
+## PCB Design and Development
+
+Create a dedicated PCB service page.
+
+Allow customers to submit:
+- PCB design requirements.
+- Circuit diagrams.
+- Schematics.
+- Gerber files.
+- BOM.
+- PCB dimensions.
+- Layer count.
+- Board quantity.
+- Component assembly requirements.
+- Special instructions.
+
+Include a PCB enquiry and quotation workflow.
+
+Allow customers to upload files securely.
+
+Admin should review PCB requirements, generate quotations and send payment links.
+
+Do not show automatic manufacturing prices unless a verified pricing engine is configured.
+
+## Engineering project development
+
+Include:
+- Final-year B.E./B.Tech projects.
+- Mini projects.
+- Hardware projects.
+- Software projects.
+- AI and ML projects.
+- IoT projects.
+- Robotics projects.
+- Electrical and electronics projects.
+- Mechanical and mechatronics projects.
+- Research and prototype development.
+
+Every service page must have a "Request a Quote" or "Start Your Project" CTA.
+
+---
+
+# PART 6 – PROJECT ENQUIRY AND CUSTOMER REGISTRATION SYSTEM
+
+Create a complete project enquiry system.
+
+Route: `/project-enquiry`
+
+Customers must register or log in before submitting an enquiry.
+
+## Customer registration
+
+Fields:
+- Full name.
+- Email address.
+- Mobile number.
+- Password or secure passwordless authentication.
+- Email verification.
+- Mobile OTP verification if an SMS provider is configured.
+
+Include:
+- Login.
+- Logout.
+- Forgot password.
+- Password reset.
+- Account profile.
+- Saved addresses.
+
+Do not pretend OTP verification is working without a configured provider.
+
+## Project enquiry form
+
+Collect:
+
+Customer information:
+- Full name.
+- Email.
+- Phone number.
+- Company or college name, if applicable.
+
+Project information:
+- Project title.
+- Engineering branch.
+- Academic level.
+- Project category.
+- Project type.
+- Project description.
+- Problem statement.
+- Expected functionality.
+- Required technologies.
+- Expected deliverables.
+- Target completion date.
+- Estimated budget.
+- Special requirements.
+
+Allow the customer to upload:
+- Project report.
+- PDF documents.
+- Word documents.
+- Images.
+- Circuit diagrams.
+- ZIP files.
+- Other permitted technical files.
+
+Store uploads in private Supabase Storage.
+
+## Billing and delivery addresses
+
+Add separate sections for:
+
+1. Billing address.
+2. Project delivery address.
+
+Fields:
+- Full name.
+- Mobile number.
+- House / Flat / Building.
+- Street / Locality.
+- Landmark.
+- City.
+- District.
+- State.
+- PIN code.
+- Country.
+
+Allow the customer to select saved addresses or add a new address.
+
+Save the selected delivery address against the enquiry.
+
+Allow address modification before dispatch and maintain an address-change history.
+
+## Project enquiry status
+
+Statuses:
+- Submitted.
+- Under Review.
+- Technical Review.
+- Quotation Prepared.
+- Quotation Sent.
+- Customer Accepted.
+- Modification Requested.
+- Rejected.
+- Awaiting Payment.
+- Payment Confirmed.
+- Project Started.
+- In Progress.
+- Testing.
+- Ready for Delivery.
+- Dispatched.
+- Completed.
+- On Hold.
+
+## Admin project review
+
+Admin must be able to:
+- View enquiries.
+- Download attachments securely.
+- Review requirements.
+- Assign engineers.
+- Add internal notes.
+- Request additional information.
+- Change status.
+- Generate a quotation.
+- Send quotation to customer.
+- Track customer acceptance.
+
+## Quotation builder
+
+Create an admin quotation builder with:
+- Item name.
+- Description.
+- Quantity.
+- Unit price.
+- Hardware cost.
+- Software cost.
+- Design and development charges.
+- Testing charges.
+- Documentation charges.
+- Delivery charges.
+- Discount.
+- Applicable GST.
+- Total quotation amount.
+- Advance payment percentage.
+- Balance amount.
+
+Allow quotation PDF generation.
+
+Customers must be able to:
+- View quotation.
+- Download PDF.
+- Accept quotation.
+- Request modification.
+- Reject quotation.
+
+Maintain quotation revisions and acceptance history.
+
+## Project payment and activation
+
+Integrate Razorpay securely.
+
+The admin can define the required advance payment or full payment.
+
+Create payment orders on the server.
+
+Verify payment signatures and webhooks.
+
+Only after verified payment and quotation acceptance:
+- Create a unique project ID.
+- Create the project record.
+- Generate work order.
+- Assign the engineer.
+- Activate the project.
+- Notify the customer.
+
+Never activate projects based only on a frontend success message.
+
+## Project progress dashboard
+
+Customer can view:
+- Project ID.
+- Project details.
+- Quotation.
+- Payment details.
+- Assigned team, where appropriate.
+- Project milestones.
+- Progress updates.
+- Uploaded progress photos.
+- Deliverables.
+- Delivery details.
+
+Admin can add milestones and progress updates.
+
+---
+
+# PART 7 – COMPLETE 3D PRINTING SERVICE
+
+Route: `/services/3d-printing`
+
+Build a complete online custom 3D printing ordering platform.
+
+The customer must be able to upload their own 3D model, configure the printing requirements, view an estimate, enter a delivery address and pay online.
+
+## Supported file formats
+
+- STL.
+- OBJ.
+- 3MF.
+- STEP / STP through a supported CAD conversion workflow.
+
+Provide:
+- Drag-and-drop upload.
+- File validation.
+- File size restrictions.
+- File preview.
+- Upload progress.
+- Multiple file support where technically appropriate.
+- Remove and replace options.
+
+Store uploaded models securely in private storage.
+
+## 3D model viewer
+
+Integrate an interactive 3D viewer using an appropriate library such as Three.js.
+
+Allow:
+- Rotate.
+- Zoom.
+- Pan.
+- Reset camera.
+- Display model dimensions.
+- Preview the uploaded model.
+
+Do not show fabricated dimensions or pretend that an invalid file has been processed.
+
+## Material selection
+
+Support configurable materials such as:
+- PLA.
+- ABS.
+- PETG.
+- TPU.
+- Nylon.
+- Resin.
+
+Admin can add, remove and update materials.
+
+## Colour selection
+
+Allow:
+- Black.
+- White.
+- Red.
+- Blue.
+- Green.
+- Yellow.
+- Grey.
+- Natural.
+- Other admin-configured colours.
+
+Only display colours that are actually available for the selected material and printing technology.
+
+## Printing technology
+
+- FDM.
+- SLA / Resin.
+- Additional technologies configured by admin.
+
+## Printing configuration
+
+Allow customers to select:
+- Layer height.
+- Infill percentage.
+- Printing quality.
+- Support settings.
+- Quantity.
+- Finishing requirements.
+- Special instructions.
+
+Example layer heights:
+0.1 mm, 0.15 mm, 0.2 mm, 0.3 mm.
+
+Example infill:
+10%, 20%, 30%, 50%, 75%, 100%.
+
+Validate settings against machine and material capabilities.
+
+## Real slicing engine
+
+Integrate a real backend slicing service such as PrusaSlicer or OrcaSlicer.
+
+The slicing workflow must:
+1. Receive the uploaded file.
+2. Validate the model.
+3. Check build volume.
+4. Prepare the model for the selected printer.
+5. Generate slicing output.
+6. Calculate material consumption.
+7. Calculate printing time.
+8. Calculate support material.
+9. Estimate machine usage.
+10. Return the slicing results.
+
+Display:
+- Model dimensions.
+- Material consumption.
+- Estimated print time.
+- Selected configuration.
+- Estimated price.
+- Technical warnings.
+
+Use a secure isolated processing environment. Do not run arbitrary uploaded files or scripts.
+
+If automatic slicing fails or manual engineering review is required, show "Technical Review Required" and allow admin quotation.
+
+## Pricing engine
+
+Calculate:
+
+Material cost = Material consumption × Material price per unit.
+
+Machine cost = Estimated printing time × Machine hourly rate.
+
+Additional costs = Support material + Wastage + Labour + Finishing.
+
+Subtotal = Material cost + Machine cost + Additional costs.
+
+Final total = Subtotal + Delivery charges + Applicable GST − Discounts.
+
+Allow admin to configure:
+- Material rates.
+- Machine rates.
+- Minimum order.
+- Wastage.
+- Labour.
+- Finishing.
+- GST.
+- Discounts.
+- Delivery charges.
+
+Show transparent pricing to customers.
+
+Never calculate a production-ready price from file size alone.
+
+## Delivery checkout
+
+Allow customer to:
+- Add new address.
+- Select saved address.
+- Edit address.
+- Set default address.
+- Select delivery address different from registered address.
+
+Collect:
+- Full name.
+- Mobile.
+- House/Flat.
+- Street/Area.
+- Landmark.
+- City.
+- District.
+- State.
+- PIN code.
+- Country.
+
+Validate address fields and Indian PIN codes.
+
+Show the complete order summary before payment.
+
+## Razorpay payment
+
+Integrate secure server-side Razorpay order creation, payment verification, webhooks and duplicate-event protection.
+
+Support payment methods made available by the configured Razorpay account.
+
+Do not store card numbers, CVV or sensitive payment credentials.
+
+## Printing order statuses
+
+- Order Placed.
+- Payment Confirmed.
+- File Validation.
+- Technical Review.
+- Slicing Completed.
+- Printing Scheduled.
+- Printing in Progress.
+- Quality Inspection.
+- Packaging.
+- Shipped.
+- Out for Delivery.
+- Delivered.
+- Cancelled, where eligible.
+
+Allow admin to upload production photographs and shipping tracking information.
+
+Customer can view progress from their dashboard.
+
+---
+
+# PART 8 – 3D PRINTED PRODUCTS STORE
+
+Route: `/store/3d-printed-products`
+
+Create a separate product store for ready-made 3D printed products.
+
+Categories:
+- Engineering Models.
+- Mechanical Components.
+- Robotics Parts.
+- Drone Accessories.
+- Educational Models.
+- Architecture Models.
+- Decorative Products.
+- Custom 3D Printed Products.
+- Industrial Prototypes.
+- Customized Gifts.
+
+## Product listing
+
+Each product card must display:
+- Product image.
+- Product name.
+- Price.
+- Discount.
+- Rating, only if genuine reviews exist.
+- Stock status.
+- View Details.
+- Add to Cart.
+
+## Individual product page
+
+Route: `/product/[slug]`
+
+Each product must contain:
+- Multiple images.
+- Product description.
+- Technical specifications.
+- Dimensions.
+- Weight.
+- Material.
+- Available colours.
+- Available sizes or variants.
+- Price.
+- Discount price.
+- Stock.
+- Production time.
+- Shipping information.
+- Quantity selector.
+- Add to Cart.
+- Buy Now.
+- Related products.
+
+Allow product-specific customization where supported.
+
+## Store functionality
+
+Implement:
+- Product search.
+- Category filters.
+- Price filters.
+- Material filters.
+- Colour filters.
+- Sorting.
+- Wishlist.
+- Cart.
+- Checkout.
+- Razorpay.
+- Order confirmation.
+- Order tracking.
+- Reviews and ratings with verified-purchase controls.
+
+All products and prices must be dynamically managed through admin.
+
+Do not use hardcoded demo products as live inventory.
+
+---
+
+# PART 9 – GENERAL ONLINE STORE
+
+Route: `/shop`
+
+Create a complete engineering and electronics e-commerce store.
+
+Product categories should support:
+- FPV Drone Components.
+- Agricultural Drone Components.
+- Flight Controllers.
+- ESCs.
+- Motors.
+- Propellers.
+- Batteries and Power Systems.
+- GPS and Telemetry.
+- Sensors.
+- Robotics Components.
+- Microcontrollers.
+- Development Boards.
+- IoT Modules.
+- Embedded Electronics.
+- Mechanical Parts.
+- 3D Printed Products.
+- Engineering Accessories.
+
+Make categories configurable through the admin dashboard.
+
+## Product catalogue
+
+Each product needs:
+- Product name.
+- SKU.
+- Product slug.
+- Brand.
+- Category.
+- Images.
+- Description.
+- Technical specifications.
+- Price.
+- Discount price.
+- GST configuration.
+- Stock quantity.
+- Availability.
+- Shipping weight.
+- Dimensions.
+- Warranty information, if applicable.
+- Related products.
+- Product documents and datasheets.
+
+## Shopping features
+
+- Search.
+- Filters.
+- Sorting.
+- Wishlist.
+- Cart.
+- Coupon codes.
+- Shipping calculation.
+- Checkout.
+- Razorpay.
+- Order history.
+- Invoices.
+- Tracking.
+
+Ensure inventory is reserved or reduced safely when orders are placed and confirmed, with protection against overselling.
+
+---
+
+# PART 10 – B2B AND BULK ORDER PORTAL
+
+Route: `/b2b`
+
+Create a B2B enquiry system for:
+- Bulk electronics orders.
+- Drone components.
+- Robotics components.
+- 3D printing bulk orders.
+- Custom manufacturing.
+- OEM/private-label requirements.
+- Engineering development contracts.
+- Institutional and industrial requirements.
+
+Collect:
+- Company name.
+- Contact person.
+- Email.
+- Mobile.
+- GSTIN, optional.
+- Product/service requirements.
+- Quantity.
+- Technical specifications.
+- Expected delivery date.
+- Shipping location.
+- File attachments.
+
+Admin can:
+- Review enquiries.
+- Prepare bulk quotations.
+- Set custom prices.
+- Offer volume discounts.
+- Generate PDF quotations.
+- Send payment links.
+- Convert accepted quotations into orders.
+
+---
+
+# PART 11 – CUSTOMER ACCOUNT DASHBOARD
+
+Route: `/my-account`
+
+Build a unified customer dashboard.
+
+Sections:
+
+1. Profile.
+2. Personal information.
+3. Saved addresses.
+4. Project enquiries.
+5. Project quotations.
+6. Active projects.
+7. Project milestones.
+8. 3D printing orders.
+9. Product orders.
+10. B2B enquiries.
+11. Payments.
+12. Invoices and receipts.
+13. Wishlist.
+14. Notifications.
+15. Support tickets.
+16. Password and security.
+
+Customer should be able to view and download their own documents.
+
+Display a unified activity timeline.
+
+Customers must never access another customer's information.
+
+---
+
+# PART 12 – ADMIN DASHBOARD
+
+Route: `/admin`
+
+Create a complete, secure admin dashboard with role-based permissions.
+
+## Dashboard overview
+
+Display:
+- Total revenue.
+- Total orders.
+- Pending payments.
+- Total customers.
+- New project enquiries.
+- Active projects.
+- Pending quotations.
+- 3D printing orders.
+- Store orders.
+- Low-stock products.
+- Recent activities.
+
+Use real database data.
+
+## Admin modules
+
+1. Dashboard.
+2. Customers.
+3. User roles and permissions.
+4. Project enquiries.
+5. Project quotations.
+6. Active projects.
+7. Project milestones.
+8. Project delivery.
+9. 3D printing orders.
+10. Slicing jobs.
+11. 3D printing materials.
+12. 3D printer machines.
+13. 3D printing pricing.
+14. 3D printed products.
+15. Product catalogue.
+16. Categories.
+17. Inventory.
+18. Store orders.
+19. B2B enquiries.
+20. PCB enquiries.
+21. Payments.
+22. Invoices.
+23. Shipping.
+24. Coupons and discounts.
+25. Blogs.
+26. Projects and case studies.
+27. Website CMS.
+28. Homepage banners.
+29. Testimonials.
+30. FAQs.
+31. Notifications.
+32. Support tickets.
+33. Reports and analytics.
+34. Settings.
+35. Audit logs.
+
+## Admin roles
+
+Create role-based access:
+- Super Admin.
+- Admin.
+- Project Manager.
+- Engineer.
+- 3D Printing Operator.
+- Inventory Manager.
+- Sales Manager.
+- Support Staff.
+
+Super Admin can manage roles and permissions.
+
+Every sensitive admin action must be logged.
+
+---
+
+# PART 13 – PAYMENT, INVOICING AND FINANCE
+
+Integrate Razorpay for online payments.
+
+Payment requirements:
+- Server-side order creation.
+- Signature verification.
+- Webhook verification.
+- Idempotency.
+- Payment status tracking.
+- Failed payment handling.
+- Refund management.
+- Payment reconciliation.
+
+Support:
+- Full payments.
+- Advance payments.
+- Balance payments.
+- Quotation-linked payments.
+- Store payments.
+- Custom 3D printing payments.
+
+Create document generation for:
+- Quotations.
+- Proforma invoices.
+- Payment receipts.
+- Tax invoices, only when legally applicable.
+- Work orders.
+- Delivery documents.
+
+Make company details and tax settings configurable.
+
+Do not invent a GSTIN or issue a tax invoice without the required business tax information.
+
+Maintain separate order, payment and invoice records.
+
+---
+
+# PART 14 – SHIPPING AND DELIVERY MANAGEMENT
+
+Build a unified shipping management system.
+
+Features:
+- Billing address.
+- Shipping address.
+- Saved customer addresses.
+- Delivery charge configuration.
+- Shipment creation.
+- Courier name.
+- Tracking ID.
+- Tracking URL.
+- Dispatch date.
+- Expected delivery date.
+- Delivery status.
+- Delivery confirmation.
+
+Admin can update tracking details.
+
+Customer can track:
+- Product orders.
+- 3D printing orders.
+- Project deliveries.
+
+Integrate an external courier provider only when credentials and supported APIs are configured.
+
+Do not display fake live tracking.
+
+---
+
+# PART 15 – BLOGS, SEO AND CONTENT MANAGEMENT
+
+Create a full CMS for:
+- Blogs.
+- Engineering tutorials.
+- Technology news.
+- Company updates.
+- Product announcements.
+- Project showcases.
+- Case studies.
+
+Admin must be able to:
+- Create posts.
+- Edit posts.
+- Upload images.
+- Set categories.
+- Set tags.
+- Schedule posts.
+- Publish/unpublish.
+- Set SEO metadata.
+
+SEO requirements:
+- Unique page titles.
+- Meta descriptions.
+- Canonical URLs.
+- Open Graph metadata.
+- Structured data where appropriate.
+- Sitemap.xml.
+- Robots.txt.
+- Clean URL slugs.
+- Image alt text.
+- Internal linking.
+- Fast page loading.
+
+Optimize for search phrases related to:
+- Engineering project development in Nagpur.
+- 3D printing services in Nagpur.
+- Custom 3D printing.
+- PCB design services.
+- Drone development.
+- Robotics projects.
+- IoT development.
+- AI and machine learning development.
+- Embedded systems.
+- Engineering prototyping.
+
+Do not use keyword stuffing or fabricated location pages.
+
+---
+
+# PART 16 – CONTACT AND CUSTOMER SUPPORT
+
+Create a professional contact page.
+
+Display:
+- Company name.
+- Address.
+- Email.
+- Contact phone number, configurable by admin.
+- Business hours, configurable by admin.
+- Google Maps or map integration using the verified business address.
+- Contact form.
+
+Contact form fields:
+- Name.
+- Email.
+- Mobile.
+- Subject.
+- Service category.
+- Message.
+- Optional attachment.
+
+Store all enquiries in the database.
+
+Create support tickets in the customer dashboard.
+
+Allow admin to:
+- View enquiries.
+- Assign support staff.
+- Reply.
+- Change ticket status.
+- Add internal notes.
+- Maintain conversation history.
+
+Add WhatsApp contact only after the correct business number is configured.
+
+---
+
+# PART 17 – DATABASE AND BACKEND ARCHITECTURE
+
+Use the following technology stack:
+
+Frontend:
+- Next.js with App Router.
+- TypeScript.
+- Tailwind CSS.
+- Reusable component architecture.
+- Server-side rendering where appropriate.
+
+Backend:
+- Supabase.
+- PostgreSQL.
+- Supabase Authentication.
+- Supabase Storage.
+- Supabase Edge Functions or secure server-side API routes.
+- Row Level Security.
+
+Payments:
+- Razorpay.
+
+3D:
+- Three.js or a suitable 3D viewer.
+- Real backend slicing integration.
+
+Other integrations:
+- Email service provider.
+- SMS/OTP provider, if configured.
+- Courier API, if configured.
+- Analytics.
+
+Create well-designed relational database tables for:
+
+- profiles.
+- user_roles.
+- role_permissions.
+- customer_addresses.
+- contact_enquiries.
+- project_enquiries.
+- project_attachments.
+- project_quotations.
+- project_quotation_items.
+- quotation_revisions.
+- quotation_acceptances.
+- projects.
+- project_assignments.
+- project_milestones.
+- project_updates.
+- project_documents.
+- printing_materials.
+- printing_colours.
+- printing_machines.
+- printing_uploads.
+- printing_configurations.
+- slicing_jobs.
+- printing_quotes.
+- printing_orders.
+- printing_order_items.
+- printing_order_status_history.
+- products.
+- product_categories.
+- product_images.
+- product_variants.
+- product_inventory.
+- carts.
+- cart_items.
+- wishlists.
+- wishlist_items.
+- store_orders.
+- store_order_items.
+- b2b_enquiries.
+- pcb_enquiries.
+- payments.
+- payment_events.
+- invoices.
+- shipments.
+- coupons.
+- blogs.
+- blog_categories.
+- website_pages.
+- banners.
+- testimonials.
+- faqs.
+- notifications.
+- support_tickets.
+- support_messages.
+- audit_logs.
+
+Use proper:
+- Primary keys.
+- Foreign keys.
+- Unique constraints.
+- Indexes.
+- Timestamps.
+- Status fields.
+- Database transactions where required.
+
+Use migrations and provide the complete SQL schema.
+
+Do not duplicate customer records unnecessarily.
+
+---
+
+# PART 18 – SECURITY AND DATA PROTECTION
+
+Implement security from the beginning.
+
+Requirements:
+- Supabase Row Level Security.
+- Role-based authorization.
+- Secure authentication.
+- Secure password recovery.
+- Server-side payment processing.
+- Razorpay signature verification.
+- Webhook signature verification.
+- Private file storage.
+- Signed download URLs.
+- File type and size validation.
+- File scanning where available.
+- Rate limiting.
+- Input validation.
+- Output sanitization.
+- CSRF protection where applicable.
+- Secure environment variables.
+- Audit logs.
+- Secure error handling.
+- Protection against SQL injection.
+- Protection against unauthorized admin access.
+- Protection against duplicate payment processing.
+- Protection against duplicate order creation.
+
+Never expose:
+- Supabase service-role keys.
+- Razorpay secret keys.
+- Database credentials.
+- Private storage URLs.
+- Internal admin credentials.
+
+Do not place secrets inside frontend code or commit them to Git.
+
+---
+
+# PART 19 – WEBSITE PERFORMANCE AND RESPONSIVENESS
+
+Optimize the website for:
+- Desktop.
+- Laptop.
+- Tablet.
+- Android mobile.
+- iPhone.
+
+Requirements:
+- Fast page loading.
+- Optimized images.
+- Lazy loading.
+- Responsive components.
+- Database pagination.
+- Efficient queries.
+- Caching where appropriate.
+- SEO-friendly rendering.
+- Accessible forms.
+- Clear validation.
+- Useful error messages.
+
+Do not load the entire product catalogue or all orders into one request.
+
+Use pagination and search.
+
+---
+
+# PART 20 – WEBSITE SETTINGS AND CMS
+
+Admin must be able to manage the website without editing source code.
+
+Editable settings:
+- Company information.
+- Logo.
+- Contact details.
+- Social media links.
+- Navigation.
+- Homepage content.
+- Banners.
+- Service descriptions.
+- Products.
+- Product prices.
+- Categories.
+- 3D printing materials.
+- Colours.
+- Machines.
+- Pricing rules.
+- Delivery charges.
+- GST settings.
+- Offers.
+- Blogs.
+- FAQs.
+- Policies.
+- SEO metadata.
+
+Provide image upload and content editing features.
+
+---
+
+# PART 21 – REQUIRED PROJECT STRUCTURE AND DELIVERABLES
+
+Generate the complete working project, not just screenshots or a design preview.
+
+Deliver:
+
+1. Complete Next.js source code.
+2. TypeScript frontend.
+3. Responsive UI components.
+4. Supabase SQL schema.
+5. Database migrations.
+6. Supabase Row Level Security policies.
+7. Authentication system.
+8. Secure API routes.
+9. Razorpay integration.
+10. Webhook handling.
+11. Admin dashboard.
+12. Customer dashboard.
+13. Product management.
+14. Inventory management.
+15. Project enquiry and quotation system.
+16. 3D printing upload and configuration system.
+17. Real slicing integration architecture and implementation.
+18. PCB enquiry system.
+19. B2B enquiry system.
+20. Shipping management.
+21. Invoice and PDF generation.
+22. Email notification integration.
+23. Environment variable example file.
+24. README installation guide.
+25. Deployment instructions.
+26. Testing instructions.
+27. Sample data clearly marked as development-only.
+
+Create a clear folder structure.
+
+Include complete installation and setup instructions for Windows.
+
+Include commands to:
+- Install dependencies.
+- Configure environment variables.
+- Connect Supabase.
+- Run database migrations.
+- Start the development server.
+- Build for production.
+- Deploy the website.
+
+Do not leave core functions as TODO comments or nonfunctional buttons.
+
+---
+
+# PART 22 – DEVELOPMENT EXECUTION PLAN
+
+Build in the following order.
+
+**Phase 1 – Foundation**
+- Next.js project.
+- Design system.
+- Navigation.
+- Homepage.
+- Company pages.
+- Services pages.
+- Responsive footer.
+
+**Phase 2 – Backend**
+- Supabase configuration.
+- Database schema.
+- Authentication.
+- Customer profiles.
+- Address management.
+- RLS policies.
+
+**Phase 3 – Project Management**
+- Project enquiry form.
+- Secure attachments.
+- Admin review.
+- Quotation builder.
+- PDF quotation.
+- Razorpay advance payment.
+- Project activation.
+- Progress dashboard.
+
+**Phase 4 – 3D Printing**
+- File uploads.
+- 3D viewer.
+- Model validation.
+- Material and colour selection.
+- Machine configuration.
+- Slicing integration.
+- Price calculation.
+- Delivery address.
+- Razorpay payment.
+- Production tracking.
+
+**Phase 5 – E-commerce**
+- Product catalogue.
+- Categories.
+- Product detail pages.
+- Cart.
+- Wishlist.
+- Checkout.
+- Inventory.
+- Payments.
+- Orders.
+- Invoices.
+
+**Phase 6 – B2B and PCB**
+- B2B enquiries.
+- PCB service enquiries.
+- Technical document uploads.
+- Admin quotations.
+- Payment links.
+
+**Phase 7 – Admin and CMS**
+- Admin dashboard.
+- Role permissions.
+- Product management.
+- Order management.
+- Website CMS.
+- Reports.
+- Notifications.
+- Audit logs.
+
+**Phase 8 – Testing and Deployment**
+- Authentication testing.
+- Customer access testing.
+- Admin access testing.
+- Payment testing.
+- Webhook testing.
+- File upload testing.
+- Slicing testing.
+- Inventory testing.
+- Address testing.
+- Mobile testing.
+- Security testing.
+- Production build.
+- Deployment.
+
+---
+
+# PART 23 – FINAL ACCEPTANCE CRITERIA
+
+The website is not complete until all the following workflows work end to end.
+
+### Workflow A: Customer project enquiry
+
+Customer registers → logs in → submits project details → uploads project documents → adds billing and delivery addresses → submits enquiry → admin reviews → admin generates quotation → customer accepts quotation → customer pays advance → payment is verified → project is created → engineer is assigned → progress is updated → project is delivered.
+
+### Workflow B: Custom 3D printing
+
+Customer logs in → opens 3D printing page → uploads STL/OBJ/3MF model → model is validated → 3D preview appears → customer selects technology → selects material → selects colour → configures print settings → backend slicer generates estimate → pricing is calculated → customer enters delivery address → customer pays → payment is verified → printing order is created → admin schedules printing → printing and inspection are completed → order is shipped → customer receives product.
+
+### Workflow C: Ready-made product purchase
+
+Customer opens shop → searches product → opens product detail page → selects variant → adds to cart → enters delivery address → checks order summary → pays using Razorpay → payment is verified → inventory is updated → admin processes order → shipment is created → customer tracks order → order is delivered.
+
+### Workflow D: Admin product management
+
+Admin logs in → adds category → adds product → uploads images → enters technical specifications → sets price → sets stock → publishes product → customer can see and purchase it.
+
+### Workflow E: Admin 3D printing management
+
+Admin configures machines → adds materials → configures colours → sets machine rates → manages slicing jobs → reviews orders → manages production → updates order status → updates shipment.
+
+### Workflow F: B2B quotation
+
+Business customer submits bulk enquiry → admin reviews requirements → admin creates quotation → customer accepts → payment is collected → order is created and tracked.
+
+---
+
+# FINAL INSTRUCTIONS TO THE AI DEVELOPMENT ENVIRONMENT
+
+1. First inspect the existing project and preserve any working code, pages, components and integrations.
+2. Do not overwrite the existing website without checking its current structure.
+3. Build the entire platform as one integrated application.
+4. Use real Supabase backend functionality, not localStorage-only demo functionality.
+5. Use Razorpay server-side integration.
+6. Implement proper admin and customer authentication.
+7. Build every listed page and connect all navigation.
+8. Make all buttons and forms functional.
+9. Use actual backend data.
+10. Do not fabricate products, reviews, prices, customer data, payment confirmations or business achievements.
+11. If credentials are missing, create a clearly documented configuration step and safe test mode rather than pretending the integration works.
+12. Use real 3D slicing output for automatic price estimates. Provide manual admin quotation fallback.
+13. Maintain a clean, scalable and maintainable codebase.
+14. Test every important customer and admin workflow.
+15. Do not stop after creating the homepage. Continue through backend, database, admin, payments, orders and all required pages.
+
+**FINAL OBJECTIVE:**
+
+Build NexusTekFusion Private Limited into a complete digital engineering business platform where customers can discover services, submit engineering project enquiries, receive quotations, pay online, order custom 3D printing, purchase ready-made 3D printed products, buy drone and electronics components, request PCB development, place B2B orders and track their projects and deliveries.
+
+The company admin team must be able to manage the entire business from one secure dashboard.
+
+The final result must be a complete, professional, production-oriented website and business management platform — not merely a frontend template.
