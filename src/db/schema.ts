@@ -1281,12 +1281,17 @@ export const paymentReceipts = webPlatformSchema.table('payment_receipts', {
   receiptNumber: text('receipt_number').notNull().unique(),
   paymentRef: text('payment_ref').notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  installmentId: integer('installment_id'),
   entityType: text('entity_type').notNull(),
   entityId: integer('entity_id').notNull(),
   paymentStage: text('payment_stage').default('').notNull(),
   amountInr: integer('amount_inr').notNull(),
   amountPaise: integer('amount_paise').default(0).notNull(),
   razorpayPaymentId: text('razorpay_payment_id').default('').notNull(),
+  storageBucket: text('storage_bucket').default('payment-receipts').notNull(),
+  pdfStoragePath: text('pdf_storage_path').default('').notNull(),
+  pdfGeneratedAt: timestamp('pdf_generated_at', { withTimezone: true }),
   payload: jsonb('payload').default({}).notNull(),
   issuedAt: timestamp('issued_at').defaultNow().notNull(),
 });
@@ -1787,6 +1792,7 @@ export const customerCarts = webPlatformSchema.table('customer_carts', {
     >()
     .default([])
     .notNull(),
+  couponCode: text('coupon_code').default('').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
@@ -2151,4 +2157,143 @@ export const paymentTransactions = webPlatformSchema.table('payment_transactions
   paidAt: timestamp('paid_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export interface DocumentPlacementPosition {
+  preset: 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
+  xMm: number;
+  yMm: number;
+}
+
+export interface DocumentPlacementSize {
+  widthMm: number;
+  heightMm: number;
+}
+
+export const documentSettings = webPlatformSchema.table('document_settings', {
+  id: serial('id').primaryKey(),
+  letterheadFilePath: text('letterhead_file_path').default('').notNull(),
+  letterheadFileName: text('letterhead_file_name').default('').notNull(),
+  letterheadMimeType: text('letterhead_mime_type').default('').notNull(),
+  stampFilePath: text('stamp_file_path').default('').notNull(),
+  stampFileName: text('stamp_file_name').default('').notNull(),
+  stampMimeType: text('stamp_mime_type').default('').notNull(),
+  signatureFilePath: text('signature_file_path').default('').notNull(),
+  signatureFileName: text('signature_file_name').default('').notNull(),
+  signatureMimeType: text('signature_mime_type').default('').notNull(),
+  storageBucket: text('storage_bucket').default('company-assets').notNull(),
+  stampPosition: jsonb('stamp_position')
+    .$type<DocumentPlacementPosition>()
+    .default({ preset: 'bottom-left', xMm: 22, yMm: 238 })
+    .notNull(),
+  stampSize: jsonb('stamp_size')
+    .$type<DocumentPlacementSize>()
+    .default({ widthMm: 30, heightMm: 30 })
+    .notNull(),
+  signaturePosition: jsonb('signature_position')
+    .$type<DocumentPlacementPosition>()
+    .default({ preset: 'bottom-right', xMm: 140, yMm: 244 })
+    .notNull(),
+  signatureSize: jsonb('signature_size')
+    .$type<DocumentPlacementSize>()
+    .default({ widthMm: 48, heightMm: 20 })
+    .notNull(),
+  updatedBy: text('updated_by').default('').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// 21. Persistent Server-Side Guest Carts (Replaces browser localStorage for unauthenticated visitors)
+export const guestCarts = webPlatformSchema.table('guest_carts', {
+  id: serial('id').primaryKey(),
+  guestTokenHash: text('guest_token_hash').notNull().unique(),
+  items: jsonb('items')
+    .$type<
+      Array<{
+        productId: number;
+        slug: string;
+        sku: string;
+        name: string;
+        imageUrl: string;
+        unitPriceInr: number;
+        gstPercent: number;
+        qty: number;
+        variant?: string;
+        color?: string;
+        stockQty: number;
+      }>
+    >()
+    .default([])
+    .notNull(),
+  couponCode: text('coupon_code').default('').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// 22. Service Catalog & Unified Permanent Service Records
+export const services = webPlatformSchema.table('services', {
+  id: serial('id').primaryKey(),
+  serviceCode: text('service_code').notNull().unique(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  category: text('category').notNull(), // Engineering | Manufacturing | PCB | Agriculture | Drone Services | B2B
+  description: text('description').default('').notNull(),
+  basePriceInr: integer('base_price_inr').default(0).notNull(),
+  gstPercent: integer('gst_percent').default(18).notNull(),
+  options: jsonb('options').$type<Record<string, unknown>>().default({}).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const serviceRecords = webPlatformSchema.table('service_records', {
+  id: serial('id').primaryKey(),
+  serviceRecordNumber: text('service_record_number').notNull().unique(),
+  serviceId: integer('service_id').references(() => services.id, { onDelete: 'set null' }),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  customerId: text('customer_id').default('').notNull(),
+  customerEmail: text('customer_email').default('').notNull(),
+  serviceName: text('service_name').notNull(),
+  category: text('category').notNull(),
+  description: text('description').default('').notNull(),
+  specifications: text('specifications').default('').notNull(),
+  selectedOptions: jsonb('selected_options').$type<Record<string, unknown>>().default({}).notNull(),
+  uploadedFiles: jsonb('uploaded_files')
+    .$type<Array<{ originalName: string; storagePath: string; bucket?: string; sizeBytes?: number; mimeType?: string }>>()
+    .default([])
+    .notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+  unitPriceInr: integer('unit_price_inr').default(0).notNull(),
+  taxInr: integer('tax_inr').default(0).notNull(),
+  totalAmountInr: integer('total_amount_inr').default(0).notNull(),
+  status: text('status').default('Pending').notNull(), // Pending | Under Review | Quotation Sent | In Progress | Completed | Rejected | Archived
+  adminRemarks: text('admin_remarks').default('').notNull(),
+  assignedTeam: text('assigned_team').default('').notNull(),
+  sourceEntityType: text('source_entity_type').default('custom_service').notNull(),
+  sourceEntityId: text('source_entity_id').default('').notNull(),
+  isDeleted: boolean('is_deleted').default(false).notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  archivedReason: text('archived_reason').default('').notNull(),
+  archivedBy: text('archived_by').default('').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// 23. Normalized Enquiry File Attachments Registry
+export const enquiryAttachments = webPlatformSchema.table('enquiry_attachments', {
+  id: serial('id').primaryKey(),
+  enquirySource: text('enquiry_source').notNull(), // product | project | pcb | b2b | support | service_record
+  enquiryId: integer('enquiry_id').notNull(),
+  enquiryNumber: text('enquiry_number').default('').notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  customerId: text('customer_id').default('').notNull(),
+  fileName: text('file_name').notNull(),
+  mimeType: text('mime_type').default('application/octet-stream').notNull(),
+  sizeBytes: integer('size_bytes').default(0).notNull(),
+  storageBucket: text('storage_bucket').default('customer-uploads').notNull(),
+  storagePath: text('storage_path').notNull(),
+  uploadedBy: text('uploaded_by').default('').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+
 

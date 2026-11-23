@@ -23,6 +23,7 @@ import {
   pickNeutralAvatar,
 } from './cms-defaults.ts';
 import { DEFAULT_PCB_PRICING_CONFIG } from './gerber.ts';
+import { ensureServicesSeed } from './service-records-service.ts';
 
 let seededOnce = false;
 
@@ -546,6 +547,9 @@ export async function ensureInitialSeed() {
 
     // 0b. Ensure initial super admin user if configured via env vars
     await ensureInitialAdminUser();
+
+    // 0c. Ensure unified service catalog is seeded in services table
+    await ensureServicesSeed();
 
     // 1. Site Settings (backfill any missing default keys & auto-heal customerCareEmail typo)
     for (const [key, value] of Object.entries(DEFAULT_SITE_SETTINGS)) {

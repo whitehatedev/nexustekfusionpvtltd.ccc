@@ -8,8 +8,12 @@ import {
   b2bEnquiries,
   companySigningAssets,
   customerActivityLogs,
+  documentSettings,
+  type DocumentPlacementPosition,
+  type DocumentPlacementSize,
   invoices,
   paymentInstallments,
+  paymentReceipts,
   pcbEnquiries,
   printingOrders,
   productEnquiries,
@@ -25,9 +29,11 @@ import {
 } from '../../db/schema.ts';
 import { AuthRequest } from '../../middleware/auth.ts';
 import {
+  deleteFromSupabaseStorage,
   downloadFromSupabaseStorage,
   isSupabaseStorageConfigured,
   uploadAgreementPdfToSupabase,
+  uploadCompanyDocumentAssetToSupabase,
   uploadSigningAssetToSupabase,
 } from '../../lib/supabase-admin.ts';
 import {
@@ -36,8 +42,13 @@ import {
   fetchRazorpayPaymentLink,
 } from '../razorpay.ts';
 import {
+  generateAndStoreFinalProjectInvoicePdf,
+  generateAndStoreInstallmentReceiptPdf,
   generateAndStoreInvoicePdf,
+  getOrCreateDocumentSettings,
   type ProjectAgreementDocumentModel,
+  renderFinalProjectInvoicePdfBuffer,
+  renderPaymentReceiptPdfBuffer,
   renderProjectAgreementPdfBuffer,
 } from '../pdf-storage.ts';
 import { recordEntityStatusChange } from '../record-history.ts';
@@ -57,7 +68,11 @@ import {
   syncRazorpayPaymentLinkToSupabase,
   syncStoreOrderToSupabase,
 } from '../supabase-ecommerce.ts';
-import { syncAgreementSettingsToSupabase, syncPaymentInstallmentToSupabase } from '../supabase-projects.ts';
+import {
+  syncAgreementSettingsToSupabase,
+  syncDocumentSettingsToSupabase,
+  syncPaymentInstallmentToSupabase,
+} from '../supabase-projects.ts';
 import { createMemoryUploadMiddleware, createNotification, generateCode, logAudit } from '../utils.ts';
 import { dispatchLifecycleEmail } from '../email.ts';
 import { emitAdminStreamEvent } from '../admin-realtime.ts';
@@ -66,6 +81,7 @@ export const adminCloudRouter = Router();
 
 const agreementPdfUpload = createMemoryUploadMiddleware(['.pdf'], 30);
 const signingAssetUpload = createMemoryUploadMiddleware(['.png', '.jpg', '.jpeg', '.webp'], 10);
+const documentAssetUpload = createMemoryUploadMiddleware(['.pdf', '.png', '.jpg', '.jpeg'], 15);
 
 async function resolveOwnerUid(userId: number | null | undefined, customerId?: string): Promise<string> {
   if (userId) {
@@ -1593,3 +1609,455 @@ adminCloudRouter.delete('/invoices/:id', async (req: AuthRequest, res) => {
     res.status(500).json({ error: 'Failed to archive invoice.' });
   }
 });
+
+// ============================================================================
+// 6. DOCUMENT & INVOICE SETTINGS (A4 Letterhead, Company Stamp & Signature)
+// ============================================================================
+function normalizeDocPlacementPosition(
+  raw: any,
+  fallback: DocumentPlacementPosition
+): DocumentPlacementPosition {
+  if (!raw || typeof raw !== 'object') return fallback;
+  const preset = ['bottom-left', 'bottom-center', 'bottom-right', 'custom'].includes(raw.preset)
+    ? (raw.preset as DocumentPlacementPosition['preset'])
+    : fallback.preset;
+  const xMm = Number.isFinite(Number(raw.xMm)) ? Math.max(5, Math.min(195, Number(raw.xMm))) : fallback.xMm;
+  const yMm = Number.isFinite(Number(raw.yMm)) ? Math.max(20, Math.min(285, Number(raw.yMm))) : fallback.yMm;
+  return { preset, xMm, yMm };
+}
+
+function normalizeDocPlacementSize(raw: any, fallback: DocumentPlacementSize): DocumentPlacementSize {
+  if (!raw || typeof raw !== 'object') return fallback;
+  const widthMm = Number.isFinite(Number(raw.widthMm))
+    ? Math.max(10, Math.min(140, Number(raw.widthMm)))
+    : fallback.widthMm;
+  const heightMm = Number.isFinite(Number(raw.heightMm))
+    ? Math.max(8, Math.min(90, Number(raw.heightMm)))
+    : fallback.heightMm;
+  return { widthMm, heightMm };
+}
+
+function validateMagicBytes(buf: Buffer, kind: 'letterhead' | 'stamp' | 'signature'): string | null {
+  if (!buf || buf.length < 8) return null;
+  const isPdf = buf.subarray(0, 4).toString('latin1') === '%PDF';
+  const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const isJpg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  if (kind === 'letterhead') {
+    if (isPdf) return 'application/pdf';
+    if (isPng) return 'image/png';
+    if (isJpg) return 'image/jpeg';
+    return null;
+  }
+  if (isPng) return 'image/png';
+  if (isJpg) return 'image/jpeg';
+  return null;
+}
+
+adminCloudRouter.get('/document-settings', async (_req, res) => {
+  try {
+    const settings = await getOrCreateDocumentSettings();
+    res.json({ settings });
+  } catch (error) {
+    console.error('Get document settings error:', error);
+    res.status(500).json({ error: 'Failed to load document settings.' });
+  }
+});
+
+adminCloudRouter.put('/document-settings', async (req: AuthRequest, res) => {
+  try {
+    const existing = await getOrCreateDocumentSettings();
+    const b = req.body || {};
+
+    const nextStampPosition = normalizeDocPlacementPosition(
+      b.stampPosition,
+      existing.stampPosition as DocumentPlacementPosition
+    );
+    const nextStampSize = normalizeDocPlacementSize(
+      b.stampSize,
+      existing.stampSize as DocumentPlacementSize
+    );
+    const nextSignaturePosition = normalizeDocPlacementPosition(
+      b.signaturePosition,
+      existing.signaturePosition as DocumentPlacementPosition
+    );
+    const nextSignatureSize = normalizeDocPlacementSize(
+      b.signatureSize,
+      existing.signatureSize as DocumentPlacementSize
+    );
+
+    const [updated] = await db
+      .update(documentSettings)
+      .set({
+        stampPosition: nextStampPosition,
+        stampSize: nextStampSize,
+        signaturePosition: nextSignaturePosition,
+        signatureSize: nextSignatureSize,
+        updatedBy: req.dbUser!.email,
+        updatedAt: new Date(),
+      })
+      .where(eq(documentSettings.id, existing.id))
+      .returning();
+
+    syncDocumentSettingsToSupabase(updated as unknown as Record<string, unknown>).catch(() => {});
+    await logAudit({
+      actorUid: req.dbUser!.uid,
+      actorEmail: req.dbUser!.email,
+      action: 'UPDATE_DOCUMENT_SETTINGS',
+      entityType: 'document_settings',
+      entityId: String(updated.id),
+      details: {
+        stampPosition: updated.stampPosition,
+        stampSize: updated.stampSize,
+        signaturePosition: updated.signaturePosition,
+        signatureSize: updated.signatureSize,
+      },
+    });
+
+    res.json({ settings: updated });
+  } catch (error) {
+    console.error('Update document settings error:', error);
+    res.status(500).json({ error: 'Failed to update document settings.' });
+  }
+});
+
+adminCloudRouter.post('/document-settings/upload/:kind', (req: AuthRequest, res) => {
+  documentAssetUpload.single('file')(req as any, res as any, async (multerErr: any) => {
+    try {
+      if (multerErr) {
+        return res.status(400).json({ error: multerErr.message || 'Invalid file upload.' });
+      }
+      const kind = String(req.params.kind || '').trim();
+      if (kind !== 'letterhead' && kind !== 'stamp' && kind !== 'signature') {
+        return res.status(400).json({ error: 'Invalid asset kind. Expected letterhead, stamp, or signature.' });
+      }
+      if (!isSupabaseStorageConfigured()) {
+        return res.status(503).json({
+          error:
+            'Supabase Storage is not configured. Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to store document assets.',
+        });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'File upload is required.' });
+      }
+
+      const detectedMime = validateMagicBytes(req.file.buffer, kind);
+      if (!detectedMime) {
+        return res.status(400).json({
+          error:
+            kind === 'letterhead'
+              ? 'Letterhead must be a valid PDF, PNG, or JPG file.'
+              : 'Stamp and signature files must be valid PNG or JPG images.',
+        });
+      }
+
+      const existing = await getOrCreateDocumentSettings();
+      const uploaded = await uploadCompanyDocumentAssetToSupabase({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimeType: detectedMime,
+        kind,
+      });
+
+      const oldPath =
+        kind === 'letterhead'
+          ? existing.letterheadFilePath
+          : kind === 'stamp'
+          ? existing.stampFilePath
+          : existing.signatureFilePath;
+      if (oldPath && oldPath !== uploaded.storagePath) {
+        await deleteFromSupabaseStorage(existing.storageBucket || 'company-assets', oldPath).catch(() => {});
+      }
+
+      const patch =
+        kind === 'letterhead'
+          ? {
+              letterheadFilePath: uploaded.storagePath,
+              letterheadFileName: uploaded.fileName,
+              letterheadMimeType: detectedMime,
+            }
+          : kind === 'stamp'
+          ? {
+              stampFilePath: uploaded.storagePath,
+              stampFileName: uploaded.fileName,
+              stampMimeType: detectedMime,
+            }
+          : {
+              signatureFilePath: uploaded.storagePath,
+              signatureFileName: uploaded.fileName,
+              signatureMimeType: detectedMime,
+            };
+
+      const [updated] = await db
+        .update(documentSettings)
+        .set({
+          ...patch,
+          storageBucket: uploaded.bucket,
+          updatedBy: req.dbUser!.email,
+          updatedAt: new Date(),
+        })
+        .where(eq(documentSettings.id, existing.id))
+        .returning();
+
+      syncDocumentSettingsToSupabase(updated as unknown as Record<string, unknown>).catch(() => {});
+      await logAudit({
+        actorUid: req.dbUser!.uid,
+        actorEmail: req.dbUser!.email,
+        action: `UPLOAD_DOCUMENT_${kind.toUpperCase()}`,
+        entityType: 'document_settings',
+        entityId: String(updated.id),
+        details: { storagePath: uploaded.storagePath, mimeType: detectedMime, fileName: uploaded.fileName },
+      });
+
+      return res.status(201).json({ settings: updated });
+    } catch (error: any) {
+      console.error('Upload document asset error:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to upload document asset.' });
+    }
+  });
+});
+
+adminCloudRouter.delete('/document-settings/asset/:kind', async (req: AuthRequest, res) => {
+  try {
+    const kind = String(req.params.kind || '').trim();
+    if (kind !== 'letterhead' && kind !== 'stamp' && kind !== 'signature') {
+      return res.status(400).json({ error: 'Invalid asset kind.' });
+    }
+
+    const existing = await getOrCreateDocumentSettings();
+    const bucket = existing.storageBucket || 'company-assets';
+    const targetPath =
+      kind === 'letterhead'
+        ? existing.letterheadFilePath
+        : kind === 'stamp'
+        ? existing.stampFilePath
+        : existing.signatureFilePath;
+
+    if (targetPath && isSupabaseStorageConfigured()) {
+      await deleteFromSupabaseStorage(bucket, targetPath).catch(() => {});
+    }
+
+    const clearPatch =
+      kind === 'letterhead'
+        ? { letterheadFilePath: '', letterheadFileName: '', letterheadMimeType: '' }
+        : kind === 'stamp'
+        ? { stampFilePath: '', stampFileName: '', stampMimeType: '' }
+        : { signatureFilePath: '', signatureFileName: '', signatureMimeType: '' };
+
+    const [updated] = await db
+      .update(documentSettings)
+      .set({
+        ...clearPatch,
+        updatedBy: req.dbUser!.email,
+        updatedAt: new Date(),
+      })
+      .where(eq(documentSettings.id, existing.id))
+      .returning();
+
+    syncDocumentSettingsToSupabase(updated as unknown as Record<string, unknown>).catch(() => {});
+    await logAudit({
+      actorUid: req.dbUser!.uid,
+      actorEmail: req.dbUser!.email,
+      action: `REMOVE_DOCUMENT_${kind.toUpperCase()}`,
+      entityType: 'document_settings',
+      entityId: String(updated.id),
+      details: { removedPath: targetPath },
+    });
+
+    res.json({ settings: updated });
+  } catch (error) {
+    console.error('Delete document asset error:', error);
+    res.status(500).json({ error: 'Failed to remove document asset.' });
+  }
+});
+
+adminCloudRouter.get('/document-settings/asset/:kind', async (req, res) => {
+  try {
+    const kind = String(req.params.kind || '').trim();
+    if (kind !== 'letterhead' && kind !== 'stamp' && kind !== 'signature') {
+      return res.status(400).json({ error: 'Invalid asset kind.' });
+    }
+    const existing = await getOrCreateDocumentSettings();
+    const targetPath =
+      kind === 'letterhead'
+        ? existing.letterheadFilePath
+        : kind === 'stamp'
+        ? existing.stampFilePath
+        : existing.signatureFilePath;
+    const mimeType =
+      kind === 'letterhead'
+        ? existing.letterheadMimeType
+        : kind === 'stamp'
+        ? existing.stampMimeType
+        : existing.signatureMimeType;
+
+    if (!targetPath || !isSupabaseStorageConfigured()) {
+      return res.status(404).json({ error: 'Asset not uploaded yet.' });
+    }
+
+    const buf = await downloadFromSupabaseStorage(existing.storageBucket || 'company-assets', targetPath);
+    if (!buf) {
+      return res.status(404).json({ error: 'Asset file missing from Supabase Storage.' });
+    }
+
+    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.send(buf);
+  } catch (error) {
+    console.error('Preview document asset error:', error);
+    res.status(500).json({ error: 'Failed to load document asset.' });
+  }
+});
+
+adminCloudRouter.post('/document-settings/preview', async (req: AuthRequest, res) => {
+  try {
+    const b = req.body || {};
+    const docType = String(b.docType || 'agreement').trim();
+    const existing = await getOrCreateDocumentSettings();
+
+    const overrides = {
+      stampPosition: b.stampPosition
+        ? normalizeDocPlacementPosition(b.stampPosition, existing.stampPosition as DocumentPlacementPosition)
+        : undefined,
+      stampSize: b.stampSize
+        ? normalizeDocPlacementSize(b.stampSize, existing.stampSize as DocumentPlacementSize)
+        : undefined,
+      signaturePosition: b.signaturePosition
+        ? normalizeDocPlacementPosition(
+            b.signaturePosition,
+            existing.signaturePosition as DocumentPlacementPosition
+          )
+        : undefined,
+      signatureSize: b.signatureSize
+        ? normalizeDocPlacementSize(b.signatureSize, existing.signatureSize as DocumentPlacementSize)
+        : undefined,
+    };
+
+    const projectRows = b.projectId
+      ? await db.select().from(projects).where(eq(projects.id, Number(b.projectId))).limit(1)
+      : await db.select().from(projects).where(eq(projects.isDeleted, false)).orderBy(desc(projects.id)).limit(1);
+    const sampleProj = projectRows[0];
+
+    if (docType === 'receipt') {
+      const totalCost = Math.max(10000, Number(sampleProj?.totalAmountInr || 48000));
+      const halfAmt = Math.round(totalCost * 0.5);
+      const buf = await renderPaymentReceiptPdfBuffer(
+        {
+          receiptNumber: `RCP-PREVIEW-${new Date().getFullYear()}`,
+          issuedAt: new Date().toISOString(),
+          projectCode: sampleProj?.projectCode || 'PRJ-SAMPLE-2026',
+          projectTitle: sampleProj?.title || 'Autonomous Hexacopter Field Prototype',
+          customerName: 'Sample Customer',
+          customerEmail: 'customer@example.com',
+          customerPhone: '+91-9876543210',
+          installmentNumber: 1,
+          installmentLabel: 'First Installment (50% Advance)',
+          totalProjectCostInr: totalCost,
+          amountReceivedInr: halfAmt,
+          totalPaidToDateInr: halfAmt,
+          remainingBalanceInr: totalCost - halfAmt,
+          paymentMethod: 'Razorpay Verified',
+          transactionRef: 'pay_preview_001',
+          razorpayPaymentId: 'pay_preview_001',
+        },
+        overrides
+      );
+      return res.json({ pdfBase64: buf.toString('base64') });
+    }
+
+    if (docType === 'final_invoice') {
+      if (sampleProj) {
+        const buf = await renderFinalProjectInvoicePdfBuffer(
+          { projectId: sampleProj.id, invoiceNumber: `FINV-PREVIEW-${sampleProj.projectCode}` },
+          overrides
+        );
+        return res.json({ pdfBase64: buf.toString('base64') });
+      }
+      // Fallback sample final invoice when no projects exist yet
+      const buf = await renderPaymentReceiptPdfBuffer(
+        {
+          receiptNumber: `FINV-PREVIEW-${new Date().getFullYear()}`,
+          issuedAt: new Date().toISOString(),
+          projectCode: 'PRJ-SAMPLE-2026',
+          projectTitle: 'Consolidated Final Project Invoice Sample',
+          customerName: 'Sample Customer',
+          customerEmail: 'customer@example.com',
+          installmentNumber: 2,
+          installmentLabel: 'Final Project Consolidated Settlement',
+          totalProjectCostInr: 48000,
+          amountReceivedInr: 24000,
+          totalPaidToDateInr: 48000,
+          remainingBalanceInr: 0,
+          paymentMethod: 'Razorpay Verified',
+          transactionRef: 'pay_preview_final',
+        },
+        overrides
+      );
+      return res.json({ pdfBase64: buf.toString('base64') });
+    }
+
+    // Default: Project Agreement preview
+    const built = await buildAgreementModelForContext({
+      projectId: sampleProj?.id,
+      status: 'Awaiting Acceptance',
+      customOverrides: sampleProj
+        ? undefined
+        : {
+            projectCode: 'PRJ-SAMPLE-2026',
+            projectTitle: 'Custom Robotics & Embedded Controller Project',
+            customerName: 'Sample Customer',
+            customerEmail: 'customer@example.com',
+            totalProjectCostInr: 48000,
+            firstInstallmentInr: 24000,
+            secondInstallmentInr: 24000,
+          },
+    });
+    const rendered = await renderProjectAgreementPdfBuffer(built.model, overrides);
+    return res.json({ pdfBase64: rendered.buffer.toString('base64') });
+  } catch (error: any) {
+    console.error('Document settings preview error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to render document preview.' });
+  }
+});
+
+adminCloudRouter.get('/receipts/:id/download', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [rcp] = await db.select().from(paymentReceipts).where(eq(paymentReceipts.id, id)).limit(1);
+    if (!rcp) return res.status(404).json({ error: 'Payment receipt not found.' });
+
+    let buf: Buffer | null = null;
+    if (rcp.pdfStoragePath && isSupabaseStorageConfigured()) {
+      buf = await downloadFromSupabaseStorage(rcp.storageBucket || 'payment-receipts', rcp.pdfStoragePath);
+    }
+    if (!buf) {
+      const generated = await generateAndStoreInstallmentReceiptPdf({ receiptId: rcp.id });
+      buf = generated?.buffer || null;
+    }
+    if (!buf) return res.status(500).json({ error: 'Unable to generate payment receipt PDF.' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(rcp.receiptNumber)}.pdf"`);
+    return res.send(buf);
+  } catch (error) {
+    console.error('Admin download receipt error:', error);
+    res.status(500).json({ error: 'Failed to download payment receipt PDF.' });
+  }
+});
+
+adminCloudRouter.post('/projects/:id/final-invoice/generate', async (req: AuthRequest, res) => {
+  try {
+    const projectId = Number(req.params.id);
+    const result = await generateAndStoreFinalProjectInvoicePdf({ projectId });
+    res.json({
+      invoice: result.invoice,
+      bucket: result.bucket,
+      storagePath: result.storagePath,
+    });
+  } catch (error: any) {
+    console.error('Generate final project invoice error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to generate final project invoice.' });
+  }
+});
+

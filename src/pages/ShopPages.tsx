@@ -2134,18 +2134,30 @@ export const ProductDetailPage: React.FC<{ slug: string }> = ({ slug }) => {
 };
 
 export const CartPage: React.FC = () => {
-  const { cart, updateCartQty, removeFromCart, navigate, settings } = usePlatform();
+  const { cart, cartSummary, updateCartQty, removeFromCart, navigate, settings } = usePlatform();
   const customerCareEmail = settings.companyInfo?.customerCareEmail || 'info@nexustekfusion.in';
-  const subtotal = cart.reduce((s, i) => {
+  const clientSubtotal = cart.reduce((s, i) => {
     const unit = i.product.discountPriceInr ?? i.product.priceInr;
     return s + unit * i.qty;
   }, 0);
   const freeAbove = settings.shippingConfig?.freeShippingAboveInr ?? 2500;
-  const shipping = subtotal === 0 ? 0 : subtotal >= freeAbove ? 0 : (settings.shippingConfig?.standardShippingInr ?? 99);
-  const gst = cart.reduce((s, i) => {
+  const clientShipping =
+    clientSubtotal === 0
+      ? 0
+      : clientSubtotal >= freeAbove
+      ? 0
+      : (settings.shippingConfig?.standardShippingInr ?? 99);
+  const clientGst = cart.reduce((s, i) => {
     const unit = i.product.discountPriceInr ?? i.product.priceInr;
     return s + Math.round((unit * i.qty * i.product.gstPercent) / 100);
   }, 0);
+
+  const useServerSummary = cartSummary && cartSummary.itemCount > 0 && cart.length > 0;
+  const subtotal = useServerSummary ? cartSummary.subtotalInr : clientSubtotal;
+  const gst = useServerSummary ? cartSummary.gstInr : clientGst;
+  const discountInr = useServerSummary ? cartSummary.discountInr : 0;
+  const shipping = useServerSummary ? cartSummary.shippingInr : clientShipping;
+  const grandTotal = useServerSummary ? cartSummary.grandTotalInr : clientSubtotal + clientGst + clientShipping;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 space-y-8">
@@ -2215,10 +2227,16 @@ export const CartPage: React.FC = () => {
               <div className="space-y-2 text-sm text-[#263746]/80 font-mono tabular-nums">
                 <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toLocaleString('en-IN')}</span></div>
                 <div className="flex justify-between"><span>GST</span><span>₹{gst.toLocaleString('en-IN')}</span></div>
+                {discountInr > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Discount</span>
+                    <span>-₹{discountInr.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between"><span>Shipping</span><span>{shipping === 0 ? 'FREE' : `₹${shipping}`}</span></div>
                 <div className="border-t border-[#DCEAF5] pt-2 flex justify-between font-bold text-[#123B5D] text-base">
                   <span>Total</span>
-                  <span>₹{(subtotal + gst + shipping).toLocaleString('en-IN')}</span>
+                  <span>₹{grandTotal.toLocaleString('en-IN')}</span>
                 </div>
               </div>
               <button

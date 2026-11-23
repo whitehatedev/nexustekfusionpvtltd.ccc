@@ -2,8 +2,14 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.ts';
-import { auditLogs, notifications } from '../db/schema.ts';
+import { auditLogs, notifications, users } from '../db/schema.ts';
+import { emitCustomerStreamEvent } from './customer-realtime.ts';
+import {
+  syncAdminAuditLogToSupabase,
+  syncNotificationToSupabase,
+} from './supabase-ecommerce.ts';
 
 export const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
 
@@ -125,14 +131,23 @@ export async function logAudit(params: {
   details?: Record<string, unknown>;
 }) {
   try {
+    const entityIdStr = String(params.entityId ?? '');
     await db.insert(auditLogs).values({
       actorUid: params.actorUid,
       actorEmail: params.actorEmail,
       action: params.action,
       entityType: params.entityType,
-      entityId: String(params.entityId ?? ''),
+      entityId: entityIdStr,
       details: params.details ?? {},
     });
+    syncAdminAuditLogToSupabase({
+      actorUid: params.actorUid,
+      actorEmail: params.actorEmail,
+      action: params.action,
+      entityType: params.entityType,
+      entityId: entityIdStr,
+      details: params.details ?? {},
+    }).catch(() => {});
   } catch (err) {
     console.error('Audit log insert failed:', err);
   }
@@ -145,12 +160,34 @@ export async function createNotification(params: {
   link?: string;
 }) {
   try {
+    const link = params.link ?? '/my-account';
     await db.insert(notifications).values({
       userId: params.userId,
       title: params.title,
       message: params.message,
-      link: params.link ?? '/my-account',
+      link,
     });
+    emitCustomerStreamEvent(params.userId, {
+      type: 'notification',
+      action: 'created',
+      summary: params.title,
+    });
+    db.select({ uid: users.uid })
+      .from(users)
+      .where(eq(users.id, params.userId))
+      .limit(1)
+      .then(([u]) => {
+        if (u?.uid) {
+          return syncNotificationToSupabase({
+            userUid: u.uid,
+            title: params.title,
+            message: params.message,
+            link,
+            isRead: false,
+          });
+        }
+      })
+      .catch(() => {});
   } catch (err) {
     console.error('Notification insert failed:', err);
   }

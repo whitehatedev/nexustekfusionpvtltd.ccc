@@ -10,6 +10,7 @@ import {
   BlogPost,
   Brand,
   CartItem,
+  CartSummary,
   CaseStudy,
   CustomerPermissions,
   DbUser,
@@ -21,6 +22,17 @@ import {
   SiteSettings,
   WebsiteBannerItem,
 } from '../types/platform';
+
+const DEFAULT_CART_SUMMARY: CartSummary = {
+  itemCount: 0,
+  subtotalInr: 0,
+  gstInr: 0,
+  discountInr: 0,
+  shippingInr: 0,
+  freeShippingAboveInr: 2500,
+  grandTotalInr: 0,
+  couponCode: '',
+};
 
 import {
   ADMIN_ROLES_SET,
@@ -94,6 +106,7 @@ interface PlatformContextValue {
   refreshBootstrap: () => Promise<void>;
   refreshMe: () => Promise<void>;
   cart: CartItem[];
+  cartSummary: CartSummary;
   cartDrawerOpen: boolean;
   setCartDrawerOpen: (open: boolean) => void;
   addToCart: (product: Product, qty?: number, variant?: string, color?: string) => void;
@@ -135,12 +148,15 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [dynamicSeo, setDynamicSeo] = useState<DynamicSeoOverride | null>(null);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartSummary, setCartSummary] = useState<CartSummary>(DEFAULT_CART_SUMMARY);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const sessionTokenRef = React.useRef<string | null>(null);
   const postAuthRedirectRef = React.useRef<string | null>(null);
 
   const cartHydratedForUserRef = React.useRef<number | null>(null);
+  const guestCartHydratedRef = React.useRef<boolean>(false);
+  const guestCartDirtyRef = React.useRef<boolean>(false);
   const authFlowBusyRef = React.useRef<boolean>(false);
 
   const persistSessionToken = useCallback((token: string | null) => {
@@ -475,6 +491,53 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [syncMe, supabaseConfigured, persistSessionToken, refreshBootstrap, notify, navigate]);
 
   useEffect(() => {
+    if (authLoading || dbUser?.id) return;
+    if (guestCartHydratedRef.current) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch<{ items: CartItem[]; summary?: CartSummary }>('/api/guest-cart');
+        if (!active) return;
+        const remoteItems = Array.isArray(res.items) ? res.items.filter((r) => Boolean(r?.product?.id)) : [];
+        if (!guestCartDirtyRef.current) {
+          setCart(remoteItems);
+          if (res.summary) setCartSummary(res.summary);
+        }
+        guestCartHydratedRef.current = true;
+      } catch {
+        guestCartHydratedRef.current = true;
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [authLoading, dbUser?.id, apiFetch]);
+
+  useEffect(() => {
+    if (authLoading || dbUser?.id || !guestCartHydratedRef.current) return;
+    const timer = setTimeout(() => {
+      apiFetch<{ items?: CartItem[]; summary?: CartSummary }>('/api/guest-cart', {
+        method: 'PUT',
+        body: JSON.stringify({
+          items: cart.map((i) => ({
+            productId: i.product.id,
+            qty: i.qty,
+            variant: i.variant,
+            color: i.color,
+          })),
+        }),
+      })
+        .then((res) => {
+          if (res?.summary) setCartSummary(res.summary);
+        })
+        .catch(() => {
+          // keep client state responsive if transient preview error occurs
+        });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [cart, authLoading, dbUser?.id, apiFetch]);
+
+  useEffect(() => {
     if (!dbUser?.id) {
       cartHydratedForUserRef.current = null;
       return;
@@ -483,31 +546,37 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let active = true;
     (async () => {
       try {
-        const res = await apiFetch<{ items: CartItem[] }>('/api/cart');
+        const extraItems = guestCartDirtyRef.current
+          ? cart.map((i) => ({
+              productId: i.product.id,
+              qty: i.qty,
+              variant: i.variant,
+              color: i.color,
+            }))
+          : [];
+        const res = await apiFetch<{ items: CartItem[]; summary?: CartSummary }>('/api/cart/merge', {
+          method: 'POST',
+          body: JSON.stringify({ extraItems }),
+        });
         if (!active) return;
-        const remoteItems = Array.isArray(res.items) ? res.items.filter((r) => Boolean(r?.product?.id)) : [];
-        if (remoteItems.length > 0) {
-          setCart((localItems) => {
-            if (localItems.length === 0) return remoteItems;
-            const merged = [...localItems];
-            for (const r of remoteItems) {
-              const idx = merged.findIndex(
-                (l) => l.product.id === r.product.id && l.variant === r.variant && l.color === r.color
-              );
-              if (idx >= 0) {
-                merged[idx] = {
-                  ...merged[idx],
-                  qty: Math.min(merged[idx].product.stockQty || 999, Math.max(merged[idx].qty, r.qty)),
-                };
-              } else {
-                merged.push(r);
-              }
-            }
-            return merged;
-          });
+        const mergedItems = Array.isArray(res.items) ? res.items.filter((r) => Boolean(r?.product?.id)) : [];
+        setCart(mergedItems);
+        if (res.summary) {
+          setCartSummary(res.summary);
         }
+        guestCartDirtyRef.current = false;
+        guestCartHydratedRef.current = false;
         cartHydratedForUserRef.current = dbUser.id;
       } catch {
+        try {
+          const res = await apiFetch<{ items: CartItem[]; summary?: CartSummary }>('/api/cart');
+          if (!active) return;
+          const remoteItems = Array.isArray(res.items) ? res.items.filter((r) => Boolean(r?.product?.id)) : [];
+          if (remoteItems.length > 0) setCart(remoteItems);
+          if (res.summary) setCartSummary(res.summary);
+        } catch {
+          // ignore
+        }
         cartHydratedForUserRef.current = dbUser.id;
       }
     })();
@@ -519,7 +588,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (!dbUser?.id || cartHydratedForUserRef.current !== dbUser.id) return;
     const timer = setTimeout(() => {
-      apiFetch('/api/cart', {
+      apiFetch<{ items?: CartItem[]; summary?: CartSummary }>('/api/cart', {
         method: 'PUT',
         body: JSON.stringify({
           items: cart.map((i) => ({
@@ -529,9 +598,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             color: i.color,
           })),
         }),
-      }).catch((err: any) => {
-        notify(err?.message || 'Failed to sync cart with cloud database.', 'error');
-      });
+      })
+        .then((res) => {
+          if (res?.summary) setCartSummary(res.summary);
+        })
+        .catch((err: any) => {
+          notify(err?.message || 'Failed to sync cart with cloud database.', 'error');
+        });
     }, 100);
     return () => clearTimeout(timer);
   }, [cart, dbUser?.id, apiFetch, notify]);
@@ -990,7 +1063,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearPostAuthRedirects();
       setCustomerPermissions(null);
       cartHydratedForUserRef.current = null;
+      guestCartHydratedRef.current = false;
+      guestCartDirtyRef.current = false;
       setCart([]);
+      setCartSummary(DEFAULT_CART_SUMMARY);
       const supabase = getSupabaseClient();
       if (supabase) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
@@ -1008,6 +1084,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         notify(`"${product.name}" requires a quotation request.`, 'info');
         return;
       }
+      if (!dbUser?.id) {
+        guestCartDirtyRef.current = true;
+      }
       setCart((prev) => {
         const idx = prev.findIndex(
           (i) => i.product.id === product.id && i.variant === variant && i.color === color
@@ -1022,11 +1101,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCartDrawerOpen(true);
       notify(`Added "${product.name}" to cart.`, 'success');
     },
-    [notify]
+    [notify, dbUser?.id]
   );
 
   const updateCartQty = useCallback(
     (productId: number, variant: string | undefined, color: string | undefined, qty: number) => {
+      if (!dbUser?.id) {
+        guestCartDirtyRef.current = true;
+      }
       setCart((prev) =>
         qty <= 0
           ? prev.filter((i) => !(i.product.id === productId && i.variant === variant && i.color === color))
@@ -1037,16 +1119,31 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             )
       );
     },
-    []
+    [dbUser?.id]
   );
 
-  const removeFromCart = useCallback((productId: number, variant?: string, color?: string) => {
-    setCart((prev) =>
-      prev.filter((i) => !(i.product.id === productId && i.variant === variant && i.color === color))
-    );
-  }, []);
+  const removeFromCart = useCallback(
+    (productId: number, variant?: string, color?: string) => {
+      if (!dbUser?.id) {
+        guestCartDirtyRef.current = true;
+      }
+      setCart((prev) =>
+        prev.filter((i) => !(i.product.id === productId && i.variant === variant && i.color === color))
+      );
+    },
+    [dbUser?.id]
+  );
 
-  const clearCart = useCallback(() => setCart([]), []);
+  const clearCart = useCallback(() => {
+    setCart([]);
+    setCartSummary(DEFAULT_CART_SUMMARY);
+    if (dbUser?.id) {
+      apiFetch('/api/cart/items?clear=1', { method: 'DELETE' }).catch(() => {});
+    } else {
+      guestCartDirtyRef.current = false;
+      apiFetch('/api/guest-cart', { method: 'DELETE' }).catch(() => {});
+    }
+  }, [dbUser?.id, apiFetch]);
 
   const isSignedIn = Boolean(dbUser);
   const isAdmin = Boolean(dbUser && ADMIN_ROLES.has(dbUser.role));
@@ -1097,6 +1194,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         refreshBootstrap,
         refreshMe: syncMe,
         cart,
+        cartSummary,
         cartDrawerOpen,
         setCartDrawerOpen,
         addToCart,

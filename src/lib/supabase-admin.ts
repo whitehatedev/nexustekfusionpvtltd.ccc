@@ -88,6 +88,8 @@ const REQUIRED_BUCKETS: Array<{ name: string; public: boolean; fileSizeLimit: nu
   { name: 'project-attachments', public: false, fileSizeLimit: 83886080 },
   { name: 'project-agreements', public: false, fileSizeLimit: 52428800 },
   { name: 'company-assets', public: false, fileSizeLimit: 10485760 },
+  { name: 'payment-receipts', public: false, fileSizeLimit: 20971520 },
+  { name: 'project-invoices', public: false, fileSizeLimit: 20971520 },
   { name: 'printing-files', public: false, fileSizeLimit: 83886080 },
   { name: 'agreements', public: false, fileSizeLimit: 52428800 },
   { name: 'invoices-pdf', public: false, fileSizeLimit: 20971520 },
@@ -452,6 +454,8 @@ export type PrivateStorageBucket =
   | 'project-attachments'
   | 'project-agreements'
   | 'company-assets'
+  | 'payment-receipts'
+  | 'project-invoices'
   | 'printing-files'
   | 'agreements'
   | 'invoices-pdf'
@@ -690,6 +694,69 @@ export async function uploadSupportFileToSupabase(params: {
     folder: 'tickets',
   });
 }
+
+export async function deleteFromSupabaseStorage(
+  bucket: string,
+  storagePath: string
+): Promise<boolean> {
+  const client = getServiceRoleSupabaseClient() || getServerSupabaseClient();
+  const cleanPath = String(storagePath || '').trim().replace(/^\/+/, '');
+  if (!client || !bucket || !cleanPath || cleanPath.includes('..')) return false;
+  try {
+    const { error } = await client.storage.from(bucket).remove([cleanPath]);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function uploadCompanyDocumentAssetToSupabase(params: {
+  buffer: Buffer;
+  originalName: string;
+  mimeType: string;
+  kind: 'letterhead' | 'stamp' | 'signature';
+}) {
+  return uploadPrivateBufferToSupabaseStorage({
+    bucket: 'company-assets',
+    buffer: params.buffer,
+    originalName: params.originalName,
+    mimeType: params.mimeType || 'application/octet-stream',
+    folder: params.kind,
+  });
+}
+
+export async function uploadPaymentReceiptPdfToSupabase(params: {
+  buffer: Buffer;
+  fileName: string;
+  ownerUid?: string;
+}) {
+  return uploadPrivateBufferToSupabaseStorage({
+    bucket: 'payment-receipts',
+    buffer: params.buffer,
+    originalName: params.fileName,
+    mimeType: 'application/pdf',
+    ownerPrefix: params.ownerUid || 'shared',
+    folder: 'receipts',
+    upsert: true,
+  });
+}
+
+export async function uploadProjectInvoicePdfToSupabase(params: {
+  buffer: Buffer;
+  fileName: string;
+  ownerUid?: string;
+}) {
+  return uploadPrivateBufferToSupabaseStorage({
+    bucket: 'project-invoices',
+    buffer: params.buffer,
+    originalName: params.fileName,
+    mimeType: 'application/pdf',
+    ownerPrefix: params.ownerUid || 'shared',
+    folder: 'invoices',
+    upsert: true,
+  });
+}
+
 
 
 

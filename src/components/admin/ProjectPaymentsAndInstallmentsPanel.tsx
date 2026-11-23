@@ -28,6 +28,8 @@ interface ProjectPaymentsAndInstallmentsPanelProps {
   reminders: any[];
   attachments: any[];
   agreements: any[];
+  receipts?: any[];
+  invoices?: any[];
   onRefresh: () => void;
   onDownloadFile?: (storagePath: string, fileName: string, bucket?: string) => void;
 }
@@ -55,6 +57,8 @@ export const ProjectPaymentsAndInstallmentsPanel: React.FC<ProjectPaymentsAndIns
   reminders,
   attachments,
   agreements,
+  receipts = [],
+  invoices = [],
   onRefresh,
   onDownloadFile,
 }) => {
@@ -99,9 +103,11 @@ export const ProjectPaymentsAndInstallmentsPanel: React.FC<ProjectPaymentsAndIns
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generatingAgreement, setGeneratingAgreement] = useState(false);
+  const [generatingFinalInvoice, setGeneratingFinalInvoice] = useState(false);
 
   const firstInst = installments.find((i: any) => i.installmentNumber === 1);
   const secondInst = installments.find((i: any) => i.installmentNumber === 2);
+  const finalInvoice = invoices.find((inv: any) => inv.entityType === 'project_final_invoice' && inv.entityId === project.id) || invoices[0] || null;
 
   const handleConfigurePaymentRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,6 +323,68 @@ export const ProjectPaymentsAndInstallmentsPanel: React.FC<ProjectPaymentsAndIns
       URL.revokeObjectURL(url);
     } catch (err: any) {
       notify(err?.message || 'Unable to download agreement PDF.', 'error');
+    }
+  };
+
+  const downloadReceiptBlob = async (receiptId: number, filename: string) => {
+    try {
+      const token = await getIdToken();
+      const resp = await fetch(`/api/admin/receipts/${receiptId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'same-origin',
+      });
+      if (!resp.ok) throw new Error('Receipt PDF download failed.');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      notify(err?.message || 'Unable to download receipt PDF.', 'error');
+    }
+  };
+
+  const downloadFinalInvoiceBlob = async (invoiceId: number, filename: string) => {
+    try {
+      const token = await getIdToken();
+      const resp = await fetch(`/api/admin/invoices/${invoiceId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'same-origin',
+      });
+      if (!resp.ok) throw new Error('Final invoice PDF download failed.');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      notify(err?.message || 'Unable to download final project invoice PDF.', 'error');
+    }
+  };
+
+  const handleGenerateFinalInvoice = async () => {
+    setGeneratingFinalInvoice(true);
+    try {
+      const res = await apiFetch<{ invoice: any }>(`/api/admin/projects/${project.id}/final-invoice/generate`, {
+        method: 'POST',
+      });
+      notify(
+        `Consolidated Final Project Invoice ${res.invoice?.invoiceNumber || ''} generated with active A4 letterhead & stamp.`,
+        'success'
+      );
+      onRefresh();
+    } catch (err: any) {
+      notify(err?.message || 'Failed to generate final project invoice.', 'error');
+    } finally {
+      setGeneratingFinalInvoice(false);
     }
   };
 
@@ -744,6 +812,74 @@ export const ProjectPaymentsAndInstallmentsPanel: React.FC<ProjectPaymentsAndIns
                   className="px-2.5 py-1 border border-[#90CAF9] bg-white hover:bg-[#F0F8FF] text-[#123B5D] rounded font-semibold inline-flex items-center gap-1"
                 >
                   <Download className="w-3 h-3 text-[#42A5F5]" /> Download PDF
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Verified Payment Receipts & Consolidated Final Project Invoice */}
+      <div className="rounded-lg border border-[#DCEAF5] bg-white p-3.5 space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="font-semibold text-[#123B5D] flex items-center gap-1.5">
+            <Receipt className="w-4 h-4 text-[#42A5F5]" />
+            Verified Payment Receipts ({receipts.length}) &amp; Final Project Invoice
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {finalInvoice && (
+              <button
+                type="button"
+                onClick={() =>
+                  downloadFinalInvoiceBlob(finalInvoice.id, `${finalInvoice.invoiceNumber || `FINAL-INV-${project.projectCode}`}.pdf`)
+                }
+                className="px-3 py-1.5 bg-[#42A5F5] hover:bg-[#1E88E5] text-white rounded-lg font-semibold inline-flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Final Invoice ({finalInvoice.invoiceNumber})
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={generatingFinalInvoice || existingTotal <= 0}
+              onClick={handleGenerateFinalInvoice}
+              className="px-3 py-1.5 border border-[#90CAF9] bg-[#F0F8FF] hover:bg-[#DCEAF5] text-[#123B5D] rounded-lg font-semibold inline-flex items-center gap-1 disabled:opacity-60"
+            >
+              <Receipt className="w-3.5 h-3.5 text-[#42A5F5]" />
+              {generatingFinalInvoice
+                ? 'Generating Invoice...'
+                : finalInvoice
+                ? 'Regenerate Final Invoice PDF'
+                : 'Generate Final Project Invoice PDF'}
+            </button>
+          </div>
+        </div>
+
+        {receipts.length === 0 ? (
+          <div className="text-[11px] text-[#263746]/70">
+            Official Payment Receipts are generated automatically after each installment payment is verified. Failed payment attempts never generate receipts or invoices.
+          </div>
+        ) : (
+          <div className="divide-y divide-[#DCEAF5]">
+            {receipts.map((rcp: any) => (
+              <div key={rcp.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-bold text-[#123B5D]">{rcp.receiptNumber}</span>
+                    <span className="text-[#263746] font-medium">{rcp.paymentStage}</span>
+                    <span className="px-2 py-0.5 rounded border text-[10px] font-semibold bg-emerald-50 text-emerald-800 border-emerald-200">
+                      ₹{Number(rcp.amountInr || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#263746]/70 font-mono">
+                    Ref {rcp.paymentRef} · Issued {new Date(rcp.issuedAt).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => downloadReceiptBlob(rcp.id, `${rcp.receiptNumber || `receipt-${rcp.id}`}.pdf`)}
+                  className="px-2.5 py-1 border border-[#90CAF9] bg-white hover:bg-[#F0F8FF] text-[#123B5D] rounded font-semibold inline-flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3 text-[#42A5F5]" /> Download Receipt PDF
                 </button>
               </div>
             ))}

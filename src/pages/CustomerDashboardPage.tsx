@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
+  Archive,
   Award,
   Bell,
   Box,
@@ -25,6 +26,7 @@ import {
   Navigation,
   Package,
   Plus,
+  RefreshCw,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -34,9 +36,11 @@ import {
   Truck,
   User,
   UserCheck,
+  Wrench,
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { getSupabaseClient } from '../lib/supabase';
 import { isAdminRole } from '../lib/rbac';
 import { AddressSelector } from '../components/AddressSelector';
 import { RazorpayCheckoutModal } from '../components/RazorpayCheckoutModal';
@@ -62,6 +66,7 @@ export type TabKey =
   | 'wishlist'
   | 'reviews'
   | 'enquiries'
+  | 'services'
   | 'projects'
   | 'printing'
   | 'pcb'
@@ -86,6 +91,7 @@ function normalizeTabKey(input?: string | null): TabKey {
     'wishlist',
     'reviews',
     'enquiries',
+    'services',
     'projects',
     'printing',
     'pcb',
@@ -177,6 +183,7 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
     isAdmin,
     getIdToken,
     cart,
+    cartSummary,
     addToCart,
     updateCartQty,
     removeFromCart,
@@ -255,6 +262,18 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
   const [acceptNameMap, setAcceptNameMap] = useState<Record<number, string>>({});
   const [acceptCheckMap, setAcceptCheckMap] = useState<Record<number, boolean>>({});
   const [enquiryCategoryFilter, setEnquiryCategoryFilter] = useState<'all' | 'product' | 'project' | 'pcb' | 'b2b' | 'support'>('all');
+  const [includeArchivedEnquiries, setIncludeArchivedEnquiries] = useState(true);
+  const [serviceStatusFilter, setServiceStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [serviceRequestOpen, setServiceRequestOpen] = useState(false);
+  const [creatingService, setCreatingService] = useState(false);
+  const [serviceForm, setServiceForm] = useState({
+    serviceCode: '',
+    serviceName: '',
+    category: 'Custom Engineering',
+    specifications: '',
+    description: '',
+    quantity: 1,
+  });
   const [reviewDrafts, setReviewDrafts] = useState<Record<number, { rating: number; comment: string; busy?: boolean }>>({});
   const [payModal, setPayModal] = useState<{
     open: boolean;
@@ -265,13 +284,14 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
     amountInr: number;
   } | null>(null);
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async (silent: unknown = false) => {
+    const isSilent = silent === true;
     if (!isSignedIn) {
       setData(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!isSilent) setLoading(true);
     try {
       const res = await apiFetch('/api/me');
       setData(res);
@@ -296,16 +316,73 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
         ...(res.settings?.notificationPreferences || res.user?.notificationPreferences || {}),
       });
     } catch (err: any) {
-      notify(err?.message || 'Failed to load account.', 'error');
+      if (!isSilent) notify(err?.message || 'Failed to load account.', 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, [isSignedIn, apiFetch, notify]);
+
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+    realtimeDebounceRef.current = setTimeout(() => {
+      void loadDashboard(true);
+    }, 350);
+  }, [loadDashboard]);
 
   useEffect(() => {
     setData(null);
     loadDashboard();
-  }, [isSignedIn, dbUser?.id, dbUser?.customerId]);
+  }, [loadDashboard, dbUser?.id, dbUser?.customerId]);
+
+  useEffect(() => {
+    if (!isSignedIn || !dbUser?.id) return;
+
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/customer/stream', { withCredentials: true });
+      es.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data || '{}');
+          if (parsed?.type && parsed.type !== 'connected') {
+            scheduleRealtimeRefresh();
+          }
+        } catch {
+          // ignore keepalive frames
+        }
+      };
+    } catch {
+      // ignore if SSE unavailable
+    }
+
+    const supabase = getSupabaseClient();
+    const channelName = `ntf-customer-live-${dbUser.uid || dbUser.id}`;
+    const channel = supabase
+      ? supabase
+          .channel(channelName)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () =>
+            scheduleRealtimeRefresh()
+          )
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'service_records' }, () =>
+            scheduleRealtimeRefresh()
+          )
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_enquiries' }, () =>
+            scheduleRealtimeRefresh()
+          )
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'store_orders' }, () =>
+            scheduleRealtimeRefresh()
+          )
+          .subscribe()
+      : null;
+
+    return () => {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      if (es) es.close();
+      if (supabase && channel) {
+        supabase.removeChannel(channel).catch(() => {});
+      }
+    };
+  }, [isSignedIn, dbUser?.id, dbUser?.uid, scheduleRealtimeRefresh]);
 
   useEffect(() => {
     if (!data || typeof window === 'undefined') return;
@@ -765,6 +842,46 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
     });
   };
 
+  const downloadCloudReceiptPdf = async (rcp: any) => {
+    try {
+      const idToken = await getIdToken();
+      const headers: Record<string, string> = {};
+      if (idToken) headers.Authorization = `Bearer ${idToken}`;
+      const resp = await fetch(`/api/receipts/${rcp.id}/download`, {
+        headers,
+        credentials: 'same-origin',
+      });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${rcp.receiptNumber || `receipt-${rcp.id}`}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const errData = await resp.json().catch(() => ({}));
+      if (resp.status !== 404) {
+        throw new Error(errData.error || 'Unable to download receipt PDF.');
+      }
+    } catch (err: any) {
+      notify(err?.message || 'Unable to fetch official receipt PDF, rendering standard PDF...', 'info');
+    }
+    await downloadPaymentReceiptPdf({
+      receiptNumber: rcp.receiptNumber,
+      paymentRef: rcp.paymentRef,
+      razorpayPaymentId: rcp.razorpayPaymentId,
+      paymentStage: rcp.paymentStage,
+      amountInr: rcp.amountInr,
+      issuedAt: rcp.issuedAt,
+      customerEmail: dbUser?.email || '',
+      referenceCode: rcp.payload?.projectCode || rcp.paymentRef,
+    });
+  };
+
   const downloadAgreementPdf = async (agreementId: number, kind: 'original' | 'signed', fallbackName: string) => {
     try {
       const idToken = await getIdToken();
@@ -911,6 +1028,53 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
     }
   };
 
+  const handleCreateServiceRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceForm.serviceName.trim()) {
+      notify('Please select or enter a service name.', 'error');
+      return;
+    }
+    setCreatingService(true);
+    try {
+      const catalogItem = (data?.serviceCatalog || []).find(
+        (c: any) => c.serviceCode === serviceForm.serviceCode
+      );
+      const qty = Math.max(1, Number(serviceForm.quantity || 1));
+      const unitPriceInr = catalogItem ? Number(catalogItem.basePriceInr || 0) : 0;
+      const gstPct = catalogItem ? Number(catalogItem.gstPercent ?? 18) : 18;
+      const taxInr = unitPriceInr > 0 ? Math.round((unitPriceInr * qty * gstPct) / 100) : 0;
+      await apiFetch('/api/service-records', {
+        method: 'POST',
+        body: JSON.stringify({
+          serviceCode: serviceForm.serviceCode || undefined,
+          serviceName: serviceForm.serviceName.trim(),
+          category: serviceForm.category,
+          specifications: serviceForm.specifications.trim(),
+          description: serviceForm.description.trim(),
+          quantity: qty,
+          unitPriceInr,
+          taxInr,
+          totalAmountInr: unitPriceInr * qty + taxInr,
+        }),
+      });
+      notify('Service request saved permanently to your cloud account.', 'success');
+      setServiceRequestOpen(false);
+      setServiceForm({
+        serviceCode: '',
+        serviceName: '',
+        category: 'Custom Engineering',
+        specifications: '',
+        description: '',
+        quantity: 1,
+      });
+      loadDashboard(true);
+    } catch (err: any) {
+      notify(err?.message || 'Failed to submit service request.', 'error');
+    } finally {
+      setCreatingService(false);
+    }
+  };
+
   const unreadCount = (data?.notifications || []).filter((n: any) => !n.isRead).length;
   const activeOrdersCount = (data?.storeOrders || []).filter(
     (o: any) => !['Delivered', 'Cancelled', 'Completed'].includes(o.orderStatus)
@@ -956,6 +1120,7 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
     {
       group: 'Engineering & Manufacturing',
       items: [
+        { key: 'services', label: 'My Services', icon: Wrench, badge: (data?.serviceRecords || []).length },
         { key: 'enquiries', label: 'My Enquiries', icon: MessageSquare, badge: totalEnquiriesCount },
         { key: 'projects', label: 'My Projects', icon: FolderKanban, badge: data?.projects?.length || 0 },
         { key: 'printing', label: '3D Printing', icon: Box, badge: data?.printingOrders?.length || 0 },
@@ -1715,7 +1880,13 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                     const linkedEnq = (data.projectEnquiries || []).find((e: any) => e.id === p.enquiryId);
                     const linkedQuot = (data.quotations || []).find((q: any) => q.id === p.quotationId);
                     const projReceipts = (data.receipts || []).filter(
-                      (r: any) => r.entityType === 'project_quotation' && r.entityId === p.quotationId
+                      (r: any) =>
+                        r.projectId === p.id ||
+                        r.payload?.projectCode === p.projectCode ||
+                        (p.quotationId && r.entityType === 'project_quotation' && r.entityId === p.quotationId)
+                    );
+                    const projFinalInvoice = (data.invoices || []).find(
+                      (inv: any) => inv.entityType === 'project_final_invoice' && inv.entityId === p.id
                     );
                     const projPaySummary = (data.projectPayments || []).find((pp: any) => pp.projectId === p.id);
                     const projInstallments = [...(data.paymentInstallments || [])]
@@ -2068,6 +2239,27 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
 
                         {/* Official Project PDFs, Complete Invoice & Payment History Statement */}
                         <div className="flex flex-wrap gap-2">
+                          {projFinalInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => downloadCloudInvoicePdf(projFinalInvoice)}
+                              className="px-3 py-1.5 bg-[#42A5F5] hover:bg-[#1E88E5] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Final Project Invoice ({projFinalInvoice.invoiceNumber})
+                            </button>
+                          )}
+
+                          {projReceipts.map((rcp: any) => (
+                            <button
+                              key={rcp.id}
+                              type="button"
+                              onClick={() => downloadCloudReceiptPdf(rcp)}
+                              className="px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-700" /> Receipt ({rcp.receiptNumber})
+                            </button>
+                          ))}
+
                           {workOrder && (
                             <button
                               type="button"
@@ -3398,44 +3590,66 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-[#DCEAF5]/60">
-                  {cart.map((item) => {
-                    const unit = item.product.discountPriceInr ?? item.product.priceInr;
-                    return (
-                      <div key={`${item.product.id}-${item.variant}-${item.color}`} className="py-3 flex items-center gap-4">
-                        <img
-                          src={item.product.imageUrl}
-                          alt={item.product.name}
-                          referrerPolicy="no-referrer"
-                          className="w-16 h-14 rounded-lg object-cover bg-[#F0F8FF] shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-[#123B5D] truncate">{item.product.name}</div>
-                          <div className="text-xs text-[#263746]/70 font-mono">
-                            ₹{unit.toLocaleString('en-IN')} × {item.qty}
+                <div className="space-y-4">
+                  <div className="divide-y divide-[#DCEAF5]/60">
+                    {cart.map((item) => {
+                      const unit = item.product.discountPriceInr ?? item.product.priceInr;
+                      return (
+                        <div key={`${item.product.id}-${item.variant}-${item.color}`} className="py-3 flex items-center gap-4">
+                          <img
+                            src={item.product.imageUrl}
+                            alt={item.product.name}
+                            referrerPolicy="no-referrer"
+                            className="w-16 h-14 rounded-lg object-cover bg-[#F0F8FF] shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm text-[#123B5D] truncate">{item.product.name}</div>
+                            <div className="text-xs text-[#263746]/70 font-mono">
+                              ₹{unit.toLocaleString('en-IN')} × {item.qty}
+                            </div>
                           </div>
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, item.product.stockQty)}
+                            value={item.qty}
+                            onChange={(e) =>
+                              updateCartQty(item.product.id, item.variant, item.color, Number(e.target.value))
+                            }
+                            className="w-16 rounded-lg border border-[#DCEAF5] bg-white px-2 py-1 text-xs font-mono text-[#263746] focus:outline-none focus:border-[#64B5F6]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.product.id, item.variant, item.color)}
+                            className="p-1.5 text-[#263746]/50 hover:text-red-600"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <input
-                          type="number"
-                          min={1}
-                          max={Math.max(1, item.product.stockQty)}
-                          value={item.qty}
-                          onChange={(e) =>
-                            updateCartQty(item.product.id, item.variant, item.color, Number(e.target.value))
-                          }
-                          className="w-16 rounded-lg border border-[#DCEAF5] bg-white px-2 py-1 text-xs font-mono text-[#263746] focus:outline-none focus:border-[#64B5F6]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.product.id, item.variant, item.color)}
-                          className="p-1.5 text-[#263746]/50 hover:text-red-600"
-                          aria-label="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      );
+                    })}
+                  </div>
+                  {cartSummary && cartSummary.itemCount > 0 && (
+                    <div className="rounded-lg border border-[#DCEAF5] bg-[#F0F8FF]/60 p-4 font-mono text-xs space-y-1.5">
+                      <div className="flex justify-between text-[#263746]/80">
+                        <span>Subtotal ({cartSummary.itemCount} items)</span>
+                        <span>₹{cartSummary.subtotalInr.toLocaleString('en-IN')}</span>
                       </div>
-                    );
-                  })}
+                      <div className="flex justify-between text-[#263746]/80">
+                        <span>Estimated GST</span>
+                        <span>₹{cartSummary.gstInr.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between text-[#263746]/80">
+                        <span>Shipping</span>
+                        <span>{cartSummary.shippingInr === 0 ? 'FREE' : `₹${cartSummary.shippingInr}`}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-[#DCEAF5] pt-1.5 font-bold text-sm text-[#123B5D]">
+                        <span>Total</span>
+                        <span>₹{cartSummary.grandTotalInr.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3556,6 +3770,244 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
             </div>
           )}
 
+          {/* MY SERVICES (UNIFIED CLOUD SERVICE RECORDS) */}
+          {tab === 'services' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-[#123B5D] flex items-center gap-2">
+                    <Wrench className="w-5 h-5 text-[#42A5F5]" /> My Service Records ({(data.serviceRecords || []).length})
+                  </h2>
+                  <p className="text-xs text-[#263746]/70">
+                    Permanent cloud record of every engineering project, 3D print, PCB job, drone repair, and custom service request.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => loadDashboard(true)}
+                    className="px-3 py-2 border border-[#DCEAF5] bg-white hover:bg-[#F0F8FF] text-[#123B5D] text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setServiceRequestOpen((v) => !v)}
+                    className="px-4 py-2 bg-[#64B5F6] hover:bg-[#42A5F5] text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {serviceRequestOpen ? 'Close Form' : 'New Service Request'}
+                  </button>
+                </div>
+              </div>
+
+              {serviceRequestOpen && (
+                <form
+                  onSubmit={handleCreateServiceRequest}
+                  className="rounded-xl border border-[#90CAF9] bg-[#F0F8FF]/50 p-6 space-y-4 text-xs"
+                >
+                  <h3 className="font-display font-bold text-base text-[#123B5D]">Request an Engineering or Lab Service</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-[#123B5D] mb-1">Service Catalog</label>
+                      <select
+                        value={serviceForm.serviceCode}
+                        onChange={(e) => {
+                          const code = e.target.value;
+                          const matched = (data.serviceCatalog || []).find((c: any) => c.serviceCode === code);
+                          setServiceForm((prev) => ({
+                            ...prev,
+                            serviceCode: code,
+                            serviceName: matched ? matched.name : prev.serviceName,
+                            category: matched ? matched.category : prev.category,
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746]"
+                      >
+                        <option value="">Custom Engineering / Other</option>
+                        {(data.serviceCatalog || []).map((svc: any) => (
+                          <option key={svc.serviceCode} value={svc.serviceCode}>
+                            {svc.name} ({svc.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-[#123B5D] mb-1">Service Title *</label>
+                      <input
+                        required
+                        value={serviceForm.serviceName}
+                        onChange={(e) => setServiceForm({ ...serviceForm, serviceName: e.target.value })}
+                        placeholder="e.g. Carbon-Fiber Enclosure Prototype"
+                        className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-[#123B5D] mb-1">Category</label>
+                      <select
+                        value={serviceForm.category}
+                        onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })}
+                        className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746]"
+                      >
+                        {['Custom Engineering', '3D Printing', 'PCB Fabrication', 'Drone Repair', 'Agri Drone Spraying', 'B2B Hardware'].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-[#123B5D] mb-1">Quantity</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={serviceForm.quantity}
+                        onChange={(e) => setServiceForm({ ...serviceForm, quantity: Math.max(1, Number(e.target.value || 1)) })}
+                        className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746] font-mono"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-[#123B5D] mb-1">Technical Specifications</label>
+                      <input
+                        value={serviceForm.specifications}
+                        onChange={(e) => setServiceForm({ ...serviceForm, specifications: e.target.value })}
+                        placeholder="Material, tolerances, dimensions, target timeline..."
+                        className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746]"
+                      />
+                    </div>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={serviceForm.description}
+                    onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+                    placeholder="Describe requirements or deliverables..."
+                    className="w-full rounded-lg border border-[#DCEAF5] bg-white px-3 py-2 text-[#263746]"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setServiceRequestOpen(false)}
+                      className="px-4 py-2 rounded-lg border border-[#DCEAF5] bg-white text-[#263746]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creatingService}
+                      className="px-5 py-2 rounded-lg bg-[#64B5F6] hover:bg-[#42A5F5] text-white font-semibold disabled:opacity-50"
+                    >
+                      {creatingService ? 'Saving...' : 'Submit Service Request'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'active', 'archived'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setServiceStatusFilter(mode)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors ${
+                      serviceStatusFilter === mode
+                        ? 'bg-[#64B5F6] text-white border-[#64B5F6]'
+                        : 'bg-white text-[#263746] border-[#DCEAF5] hover:bg-[#F0F8FF]'
+                    }`}
+                  >
+                    {mode === 'all' ? 'All Records' : mode === 'active' ? 'Active' : 'Archived / Closed History'}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const allServices: any[] = Array.isArray(data.serviceRecords) ? data.serviceRecords : [];
+                const visibleServices = allServices.filter((s) => {
+                  if (serviceStatusFilter === 'active') return !s.isDeleted;
+                  if (serviceStatusFilter === 'archived') return Boolean(s.isDeleted);
+                  return true;
+                });
+                if (visibleServices.length === 0) {
+                  return (
+                    <div className="rounded-xl border border-[#DCEAF5] bg-white p-8 text-sm text-[#263746]/70">
+                      No service records found for this filter yet.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-3">
+                    {visibleServices.map((srv) => (
+                      <div
+                        key={srv.id}
+                        className={`rounded-xl border p-5 space-y-2.5 text-xs shadow-sm ${
+                          srv.isDeleted ? 'border-amber-200 bg-amber-50/30' : 'border-[#DCEAF5] bg-white'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCEAF5]/60 pb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-bold text-[#123B5D]">{srv.serviceRecordNumber}</span>
+                            <span className="px-2 py-0.5 rounded bg-[#F0F8FF] border border-[#DCEAF5] font-semibold text-[#123B5D]">
+                              {srv.category}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 font-semibold text-blue-700">
+                              {srv.status}
+                            </span>
+                            {srv.isDeleted && (
+                              <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-semibold text-amber-800 inline-flex items-center gap-1">
+                                <Archive className="w-3 h-3" /> Archived
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono text-[#263746]/70">
+                            {srv.createdAt ? new Date(srv.createdAt).toLocaleDateString('en-IN') : ''}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="font-display font-bold text-sm text-[#123B5D]">
+                              {srv.serviceName} × {srv.quantity || 1}
+                            </div>
+                            {srv.specifications && (
+                              <div className="text-[#263746]/80">
+                                <span className="font-semibold text-[#123B5D]">Specs:</span> {srv.specifications}
+                              </div>
+                            )}
+                            {srv.description && <p className="text-[#263746]">{srv.description}</p>}
+                          </div>
+                          <div className="text-right font-mono space-y-0.5 shrink-0">
+                            {Number(srv.totalAmountInr || 0) > 0 && (
+                              <>
+                                <div className="text-[11px] text-[#263746]/70">
+                                  Unit ₹{Number(srv.unitPriceInr || 0).toLocaleString('en-IN')} · GST ₹{Number(srv.taxInr || 0).toLocaleString('en-IN')}
+                                </div>
+                                <div className="font-bold text-sm text-[#123B5D]">
+                                  ₹{Number(srv.totalAmountInr || 0).toLocaleString('en-IN')}
+                                </div>
+                              </>
+                            )}
+                            {srv.assignedTeam && (
+                              <div className="text-[11px] text-[#1E88E5] font-sans font-semibold">
+                                Assigned: {srv.assignedTeam}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {srv.adminRemarks && (
+                          <div className="rounded-lg border border-[#DCEAF5] bg-[#F0F8FF]/70 p-2.5 text-[#123B5D]">
+                            <span className="font-semibold">Admin Remarks:</span> {srv.adminRemarks}
+                          </div>
+                        )}
+                        {srv.isDeleted && srv.archivedReason && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-900">
+                            <span className="font-semibold">Archive Reason:</span> {srv.archivedReason}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* UNIFIED ENQUIRIES (HARDWARE / DRONES, ENGINEERING PROJECTS, PCB, B2B, SUPPORT) */}
           {tab === 'enquiries' && (
             <div className="space-y-5">
@@ -3587,69 +4039,117 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
               </div>
 
               {(() => {
+                const mapProduct = (enq: any, archived = false) => ({
+                  uidKey: `${archived ? 'arch-' : ''}prod-${enq.id}`,
+                  category: 'product' as const,
+                  categoryLabel: 'Hardware / Drone',
+                  refNumber: enq.referenceNumber || enq.enquiryNumber || `PROD-${enq.id}`,
+                  title: `${enq.interestedProduct || 'Hardware Enquiry'}${enq.quantity ? ` · Qty ${enq.quantity}` : ''}`,
+                  subtitle: [enq.intendedApplication, enq.organizationOrFarmName || enq.fullName, enq.district, enq.state]
+                    .filter(Boolean)
+                    .join(' · '),
+                  description: enq.message || '',
+                  status: enq.status || 'Submitted',
+                  rejectionReason: enq.rejectionReason || '',
+                  archivedReason: enq.archivedReason || '',
+                  adminNotes: enq.internalNotes || enq.adminNotes || '',
+                  quotedAmountInr: null as number | null,
+                  isArchived: archived || Boolean(enq.isDeleted),
+                  createdAt: enq.createdAt,
+                  targetTab: null as TabKey | null,
+                });
+                const mapProject = (enq: any, archived = false) => ({
+                  uidKey: `${archived ? 'arch-' : ''}proj-${enq.id}`,
+                  category: 'project' as const,
+                  categoryLabel: 'Engineering Project',
+                  refNumber: enq.enquiryNumber || `PRJ-${enq.id}`,
+                  title: enq.projectTitle || 'Custom Engineering Project',
+                  subtitle: [enq.domainCategory || enq.category, enq.timelineExpectation].filter(Boolean).join(' · '),
+                  description: enq.problemStatement || enq.description || '',
+                  status: enq.status || 'Submitted',
+                  rejectionReason: enq.rejectionReason || '',
+                  archivedReason: enq.archivedReason || '',
+                  adminNotes: enq.adminNotes || enq.internalNotes || '',
+                  quotedAmountInr: null as number | null,
+                  isArchived: archived || Boolean(enq.isDeleted),
+                  createdAt: enq.createdAt,
+                  targetTab: 'projects' as TabKey,
+                });
+                const mapPcb = (pcb: any, archived = false) => ({
+                  uidKey: `${archived ? 'arch-' : ''}pcb-${pcb.id}`,
+                  category: 'pcb' as const,
+                  categoryLabel: 'PCB Fabrication',
+                  refNumber: pcb.enquiryNumber || `PCB-${pcb.id}`,
+                  title: `PCB ${pcb.layerCount || 2}-Layer (${pcb.boardDimensionsMm || 'Custom'}) · Qty ${pcb.boardQuantity || 1}`,
+                  subtitle: [pcb.surfaceFinish, pcb.assemblyRequired ? 'With PCBA Assembly' : 'Bare Board'].filter(Boolean).join(' · '),
+                  description: pcb.specialInstructions || '',
+                  status: pcb.status || 'Submitted',
+                  rejectionReason: pcb.rejectionReason || '',
+                  archivedReason: pcb.archivedReason || '',
+                  adminNotes: pcb.adminNotes || '',
+                  quotedAmountInr: pcb.quotedAmountInr ? Number(pcb.quotedAmountInr) : null,
+                  isArchived: archived || Boolean(pcb.isDeleted),
+                  createdAt: pcb.createdAt,
+                  targetTab: 'pcb' as TabKey,
+                });
+                const mapB2b = (b2b: any, archived = false) => ({
+                  uidKey: `${archived ? 'arch-' : ''}b2b-${b2b.id}`,
+                  category: 'b2b' as const,
+                  categoryLabel: 'B2B Bulk RFQ',
+                  refNumber: b2b.enquiryNumber || `B2B-${b2b.id}`,
+                  title: `${b2b.requirementCategory || 'Bulk Hardware'} · Qty ${b2b.quantity || 1}`,
+                  subtitle: [b2b.companyName, b2b.shippingLocation].filter(Boolean).join(' · '),
+                  description: b2b.technicalSpecs || '',
+                  status: b2b.status || 'Submitted',
+                  rejectionReason: b2b.rejectionReason || '',
+                  archivedReason: b2b.archivedReason || '',
+                  adminNotes: b2b.adminNotes || '',
+                  quotedAmountInr: b2b.quotedAmountInr ? Number(b2b.quotedAmountInr) : null,
+                  isArchived: archived || Boolean(b2b.isDeleted),
+                  createdAt: b2b.createdAt,
+                  targetTab: 'b2b_support' as TabKey,
+                });
+                const mapSupport = (t: any, archived = false) => ({
+                  uidKey: `${archived ? 'arch-' : ''}sup-${t.id}`,
+                  category: 'support' as const,
+                  categoryLabel: 'Support Ticket',
+                  refNumber: t.ticketNumber || `SUP-${t.id}`,
+                  title: t.subject || 'Support Enquiry',
+                  subtitle: t.serviceCategory || 'General Support',
+                  description: Array.isArray(t.messages) && t.messages[0]?.text ? String(t.messages[0].text) : '',
+                  status: t.status || 'Open',
+                  rejectionReason: t.rejectionReason || '',
+                  archivedReason: t.archivedReason || '',
+                  adminNotes: t.internalNotes || '',
+                  quotedAmountInr: null as number | null,
+                  isArchived: archived || Boolean(t.isDeleted),
+                  createdAt: t.createdAt,
+                  targetTab: 'b2b_support' as TabKey,
+                });
+
+                const arch = data.archivedEnquiries || {};
+                const archivedCount =
+                  (arch.productEnquiries || []).length +
+                  (arch.projectEnquiries || []).length +
+                  (arch.pcbEnquiries || []).length +
+                  (arch.b2bEnquiries || []).length +
+                  (arch.supportTickets || []).length;
+
                 const unifiedEnquiries = [
-                  ...(data.productEnquiries || []).map((enq: any) => ({
-                    uidKey: `prod-${enq.id}`,
-                    category: 'product' as const,
-                    categoryLabel: 'Hardware / Drone',
-                    refNumber: enq.referenceNumber || enq.enquiryNumber || `PROD-${enq.id}`,
-                    title: `${enq.interestedProduct || 'Hardware Enquiry'}${enq.quantity ? ` · Qty ${enq.quantity}` : ''}`,
-                    subtitle: [enq.intendedApplication, enq.organizationOrFarmName || enq.fullName, enq.district, enq.state]
-                      .filter(Boolean)
-                      .join(' · '),
-                    description: enq.message || '',
-                    status: enq.status || 'Submitted',
-                    createdAt: enq.createdAt,
-                    targetTab: null as TabKey | null,
-                  })),
-                  ...(data.projectEnquiries || []).map((enq: any) => ({
-                    uidKey: `proj-${enq.id}`,
-                    category: 'project' as const,
-                    categoryLabel: 'Engineering Project',
-                    refNumber: enq.enquiryNumber || `PRJ-${enq.id}`,
-                    title: enq.projectTitle || 'Custom Engineering Project',
-                    subtitle: [enq.domainCategory || enq.category, enq.timelineExpectation].filter(Boolean).join(' · '),
-                    description: enq.problemStatement || enq.description || '',
-                    status: enq.status || 'Submitted',
-                    createdAt: enq.createdAt,
-                    targetTab: 'projects' as TabKey,
-                  })),
-                  ...(data.pcbEnquiries || []).map((pcb: any) => ({
-                    uidKey: `pcb-${pcb.id}`,
-                    category: 'pcb' as const,
-                    categoryLabel: 'PCB Fabrication',
-                    refNumber: pcb.enquiryNumber || `PCB-${pcb.id}`,
-                    title: `PCB ${pcb.layerCount || 2}-Layer (${pcb.boardDimensionsMm || 'Custom'}) · Qty ${pcb.boardQuantity || 1}`,
-                    subtitle: [pcb.surfaceFinish, pcb.assemblyRequired ? 'With PCBA Assembly' : 'Bare Board'].filter(Boolean).join(' · '),
-                    description: pcb.specialInstructions || '',
-                    status: pcb.status || 'Submitted',
-                    createdAt: pcb.createdAt,
-                    targetTab: 'pcb' as TabKey,
-                  })),
-                  ...(data.b2bEnquiries || []).map((b2b: any) => ({
-                    uidKey: `b2b-${b2b.id}`,
-                    category: 'b2b' as const,
-                    categoryLabel: 'B2B Bulk RFQ',
-                    refNumber: b2b.enquiryNumber || `B2B-${b2b.id}`,
-                    title: `${b2b.requirementCategory || 'Bulk Hardware'} · Qty ${b2b.quantity || 1}`,
-                    subtitle: [b2b.companyName, b2b.shippingLocation].filter(Boolean).join(' · '),
-                    description: b2b.technicalSpecs || '',
-                    status: b2b.status || 'Submitted',
-                    createdAt: b2b.createdAt,
-                    targetTab: 'b2b_support' as TabKey,
-                  })),
-                  ...(data.supportTickets || []).map((t: any) => ({
-                    uidKey: `sup-${t.id}`,
-                    category: 'support' as const,
-                    categoryLabel: 'Support Ticket',
-                    refNumber: t.ticketNumber || `SUP-${t.id}`,
-                    title: t.subject || 'Support Enquiry',
-                    subtitle: t.serviceCategory || 'General Support',
-                    description: Array.isArray(t.messages) && t.messages[0]?.text ? String(t.messages[0].text) : '',
-                    status: t.status || 'Open',
-                    createdAt: t.createdAt,
-                    targetTab: 'b2b_support' as TabKey,
-                  })),
+                  ...(data.productEnquiries || []).map((e: any) => mapProduct(e, false)),
+                  ...(data.projectEnquiries || []).map((e: any) => mapProject(e, false)),
+                  ...(data.pcbEnquiries || []).map((e: any) => mapPcb(e, false)),
+                  ...(data.b2bEnquiries || []).map((e: any) => mapB2b(e, false)),
+                  ...(data.supportTickets || []).map((e: any) => mapSupport(e, false)),
+                  ...(includeArchivedEnquiries
+                    ? [
+                        ...(arch.productEnquiries || []).map((e: any) => mapProduct(e, true)),
+                        ...(arch.projectEnquiries || []).map((e: any) => mapProject(e, true)),
+                        ...(arch.pcbEnquiries || []).map((e: any) => mapPcb(e, true)),
+                        ...(arch.b2bEnquiries || []).map((e: any) => mapB2b(e, true)),
+                        ...(arch.supportTickets || []).map((e: any) => mapSupport(e, true)),
+                      ]
+                    : []),
                 ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
                 const filtered =
@@ -3659,30 +4159,41 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
 
                 const filterTabs: Array<{ key: typeof enquiryCategoryFilter; label: string; count: number }> = [
                   { key: 'all', label: 'All Enquiries', count: unifiedEnquiries.length },
-                  { key: 'product', label: 'Hardware & Drone', count: (data.productEnquiries || []).length },
-                  { key: 'project', label: 'Engineering Projects', count: (data.projectEnquiries || []).length },
-                  { key: 'pcb', label: 'PCB Services', count: (data.pcbEnquiries || []).length },
-                  { key: 'b2b', label: 'B2B Bulk RFQ', count: (data.b2bEnquiries || []).length },
-                  { key: 'support', label: 'Support Tickets', count: (data.supportTickets || []).length },
+                  { key: 'product', label: 'Hardware & Drone', count: (data.productEnquiries || []).length + (includeArchivedEnquiries ? (arch.productEnquiries || []).length : 0) },
+                  { key: 'project', label: 'Engineering Projects', count: (data.projectEnquiries || []).length + (includeArchivedEnquiries ? (arch.projectEnquiries || []).length : 0) },
+                  { key: 'pcb', label: 'PCB Services', count: (data.pcbEnquiries || []).length + (includeArchivedEnquiries ? (arch.pcbEnquiries || []).length : 0) },
+                  { key: 'b2b', label: 'B2B Bulk RFQ', count: (data.b2bEnquiries || []).length + (includeArchivedEnquiries ? (arch.b2bEnquiries || []).length : 0) },
+                  { key: 'support', label: 'Support Tickets', count: (data.supportTickets || []).length + (includeArchivedEnquiries ? (arch.supportTickets || []).length : 0) },
                 ];
 
                 return (
                   <>
-                    <div className="flex flex-wrap gap-2">
-                      {filterTabs.map((ft) => (
-                        <button
-                          key={ft.key}
-                          type="button"
-                          onClick={() => setEnquiryCategoryFilter(ft.key)}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                            enquiryCategoryFilter === ft.key
-                              ? 'bg-[#64B5F6] text-white border-[#64B5F6]'
-                              : 'bg-white text-[#263746] border-[#DCEAF5] hover:border-[#90CAF9] hover:bg-[#F0F8FF]'
-                          }`}
-                        >
-                          {ft.label} ({ft.count})
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {filterTabs.map((ft) => (
+                          <button
+                            key={ft.key}
+                            type="button"
+                            onClick={() => setEnquiryCategoryFilter(ft.key)}
+                            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                              enquiryCategoryFilter === ft.key
+                                ? 'bg-[#64B5F6] text-white border-[#64B5F6]'
+                                : 'bg-white text-[#263746] border-[#DCEAF5] hover:border-[#90CAF9] hover:bg-[#F0F8FF]'
+                            }`}
+                          >
+                            {ft.label} ({ft.count})
+                          </button>
+                        ))}
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-xs text-[#123B5D] font-medium cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={includeArchivedEnquiries}
+                          onChange={(e) => setIncludeArchivedEnquiries(e.target.checked)}
+                          className="rounded border-[#90CAF9]"
+                        />
+                        Include Archived / Rejected History ({archivedCount})
+                      </label>
                     </div>
 
                     {filtered.length === 0 ? (
@@ -3692,25 +4203,65 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                     ) : (
                       <div className="space-y-3">
                         {filtered.map((enq) => (
-                          <div key={enq.uidKey} className="rounded-xl border border-[#DCEAF5] bg-white p-5 space-y-2 text-xs shadow-sm">
+                          <div
+                            key={enq.uidKey}
+                            className={`rounded-xl border p-5 space-y-2 text-xs shadow-sm ${
+                              enq.isArchived
+                                ? 'border-amber-200 bg-amber-50/30'
+                                : enq.status === 'Rejected'
+                                ? 'border-red-200 bg-red-50/20'
+                                : 'border-[#DCEAF5] bg-white'
+                            }`}
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCEAF5]/60 pb-2">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-mono font-bold text-[#123B5D]">{enq.refNumber}</span>
                                 <span className="px-2 py-0.5 rounded bg-[#F0F8FF] border border-[#DCEAF5] font-semibold text-[#123B5D]">
                                   {enq.categoryLabel}
                                 </span>
+                                {enq.isArchived && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-semibold text-amber-800 inline-flex items-center gap-1">
+                                    <Archive className="w-3 h-3" /> Archived History
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3">
+                                {enq.quotedAmountInr && enq.quotedAmountInr > 0 && (
+                                  <span className="font-mono font-bold text-[#123B5D]">
+                                    Quoted ₹{enq.quotedAmountInr.toLocaleString('en-IN')}
+                                  </span>
+                                )}
                                 <span className="font-mono text-[#263746]/60">
                                   {enq.createdAt ? new Date(enq.createdAt).toLocaleDateString('en-IN') : ''}
                                 </span>
-                                <span className="font-semibold text-[#1E88E5]">{enq.status}</span>
+                                <span
+                                  className={`font-semibold ${
+                                    enq.status === 'Rejected' ? 'text-red-700' : 'text-[#1E88E5]'
+                                  }`}
+                                >
+                                  {enq.status}
+                                </span>
                               </div>
                             </div>
                             <div className="font-display font-bold text-sm text-[#123B5D]">{enq.title}</div>
                             {enq.subtitle && <div className="text-[#263746]/80">{enq.subtitle}</div>}
                             {enq.description && <p className="text-[#263746] pt-1 line-clamp-3">{enq.description}</p>}
-                            {enq.targetTab && (
+                            {enq.rejectionReason && (
+                              <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-red-800">
+                                <span className="font-semibold">Rejection Reason:</span> {enq.rejectionReason}
+                              </div>
+                            )}
+                            {enq.archivedReason && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-900">
+                                <span className="font-semibold">Archived Reason:</span> {enq.archivedReason}
+                              </div>
+                            )}
+                            {enq.adminNotes && (
+                              <div className="rounded-lg border border-[#DCEAF5] bg-[#F0F8FF]/70 p-2.5 text-[#123B5D]">
+                                <span className="font-semibold">Admin Notes:</span> {enq.adminNotes}
+                              </div>
+                            )}
+                            {enq.targetTab && !enq.isArchived && (
                               <div className="pt-1">
                                 <button
                                   type="button"
@@ -3950,7 +4501,13 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                       const linkedEnq = (data.projectEnquiries || []).find((e: any) => e.id === p.enquiryId);
                       const linkedQuot = (data.quotations || []).find((q: any) => q.id === p.quotationId);
                       const projReceipts = (data.receipts || []).filter(
-                        (r: any) => r.entityType === 'project_quotation' && r.entityId === p.quotationId
+                        (r: any) =>
+                          r.projectId === p.id ||
+                          r.payload?.projectCode === p.projectCode ||
+                          (p.quotationId && r.entityType === 'project_quotation' && r.entityId === p.quotationId)
+                      );
+                      const projFinalInvoice = (data.invoices || []).find(
+                        (inv: any) => inv.entityType === 'project_final_invoice' && inv.entityId === p.id
                       );
                       return (
                         <div key={p.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
@@ -3963,6 +4520,25 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            {projFinalInvoice && (
+                              <button
+                                type="button"
+                                onClick={() => downloadCloudInvoicePdf(projFinalInvoice)}
+                                className="px-3 py-1.5 bg-[#42A5F5] hover:bg-[#1E88E5] text-white rounded-lg font-semibold inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Download className="w-3.5 h-3.5" /> Final Invoice ({projFinalInvoice.invoiceNumber})
+                              </button>
+                            )}
+                            {projReceipts.map((rcp: any) => (
+                              <button
+                                key={rcp.id}
+                                type="button"
+                                onClick={() => downloadCloudReceiptPdf(rcp)}
+                                className="px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-lg font-semibold inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Download className="w-3.5 h-3.5 text-emerald-700" /> {rcp.receiptNumber}
+                              </button>
+                            ))}
                             <button
                               type="button"
                               onClick={() =>
@@ -4065,18 +4641,7 @@ export const CustomerDashboardPage: React.FC<{ initialTab?: InitialTabInput }> =
                           </div>
                           <button
                             type="button"
-                            onClick={() =>
-                              downloadPaymentReceiptPdf({
-                                receiptNumber: rcp.receiptNumber,
-                                paymentRef: rcp.paymentRef,
-                                razorpayPaymentId: rcp.razorpayPaymentId,
-                                paymentStage: rcp.paymentStage,
-                                amountInr: rcp.amountInr,
-                                issuedAt: rcp.issuedAt,
-                                customerEmail: dbUser?.email || '',
-                                referenceCode: rcp.payload?.projectCode || rcp.paymentRef,
-                              })
-                            }
+                            onClick={() => downloadCloudReceiptPdf(rcp)}
                             className="px-3 py-1 border border-[#90CAF9] bg-white hover:bg-[#F0F8FF] text-[#123B5D] rounded-lg font-semibold inline-flex items-center gap-1 transition-colors"
                           >
                             <Download className="w-3 h-3" /> Receipt PDF

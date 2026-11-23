@@ -687,3 +687,76 @@ export async function syncAgreementSettingsToSupabase(settings: Record<string, u
   }
 }
 
+export async function syncDocumentSettingsToSupabase(settings: Record<string, unknown>) {
+  const client = getWriteClient();
+  if (!client) return;
+  try {
+    await client.from('document_settings').upsert(
+      {
+        id: Number(settings.id || 1),
+        letterhead_file_path: settings.letterheadFilePath || '',
+        letterhead_file_name: settings.letterheadFileName || '',
+        letterhead_mime_type: settings.letterheadMimeType || '',
+        stamp_file_path: settings.stampFilePath || '',
+        stamp_file_name: settings.stampFileName || '',
+        stamp_mime_type: settings.stampMimeType || '',
+        signature_file_path: settings.signatureFilePath || '',
+        signature_file_name: settings.signatureFileName || '',
+        signature_mime_type: settings.signatureMimeType || '',
+        storage_bucket: settings.storageBucket || 'company-assets',
+        stamp_position: settings.stampPosition || { preset: 'bottom-left', xMm: 22, yMm: 238 },
+        stamp_size: settings.stampSize || { widthMm: 30, heightMm: 30 },
+        signature_position: settings.signaturePosition || { preset: 'bottom-right', xMm: 140, yMm: 244 },
+        signature_size: settings.signatureSize || { widthMm: 48, heightMm: 20 },
+        updated_by: settings.updatedBy || '',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function syncPaymentReceiptToSupabase(rcp: {
+  receiptNumber: string;
+  paymentRef: string;
+  projectId?: number | null;
+  installmentId?: number | null;
+  entityType: string;
+  entityId: number;
+  paymentStage: string;
+  amountInr: number;
+  amountPaise: number;
+  razorpayPaymentId?: string;
+  storageBucket?: string;
+  pdfStoragePath?: string;
+  pdfGeneratedAt?: Date | string | null;
+  payload?: Record<string, unknown>;
+}) {
+  const client = getWriteClient();
+  if (!client) return;
+  try {
+    await client.from('payment_receipts').upsert(
+      {
+        receipt_number: rcp.receiptNumber,
+        payment_ref: rcp.paymentRef,
+        project_id: rcp.projectId ?? null,
+        installment_id: rcp.installmentId ?? null,
+        entity_type: rcp.entityType,
+        entity_id: rcp.entityId,
+        payment_stage: rcp.paymentStage,
+        amount_inr: rcp.amountInr,
+        amount_paise: rcp.amountPaise,
+        razorpay_payment_id: rcp.razorpayPaymentId || '',
+        storage_bucket: rcp.storageBucket || 'payment-receipts',
+        pdf_storage_path: rcp.pdfStoragePath || '',
+        pdf_generated_at: rcp.pdfGeneratedAt ? new Date(rcp.pdfGeneratedAt).toISOString() : null,
+        payload: rcp.payload || {},
+      },
+      { onConflict: 'receipt_number' }
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}

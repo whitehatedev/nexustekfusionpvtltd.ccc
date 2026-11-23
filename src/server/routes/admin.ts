@@ -18,6 +18,7 @@ import {
   coupons,
   crmLeads,
   crmNotes,
+  customerCarts,
   customers,
   droneRepairBookings,
   inventoryMovements,
@@ -55,6 +56,7 @@ import {
   projectWorkOrders,
   projects,
   razorpayPaymentLinks,
+  serviceRecords,
   siteSettings,
   storeOrders,
   supportTickets,
@@ -125,6 +127,7 @@ import {
 } from '../project-upgrade-service.ts';
 import { recordEntityStatusChange } from '../record-history.ts';
 import { DEFAULT_HOMEPAGE_SECTIONS } from '../seed.ts';
+import { listActiveServicesCatalog } from '../service-records-service.ts';
 import {
   CMS_MEDIA_CATEGORIES,
   DEFAULT_CMS_BUNDLE,
@@ -350,6 +353,9 @@ adminRouter.get('/overview', async (req, res) => {
       allProjectAgreements,
       allPaymentLinks,
       activeAgreementSettings,
+      serviceCatalog,
+      allServiceRecords,
+      allCustomerCarts,
     ] = await Promise.all([
       db.select().from(users).where(isNull(users.deletedAt)).orderBy(desc(users.createdAt)),
       db.select().from(storeOrders).where(eq(storeOrders.isDeleted, false)).orderBy(desc(storeOrders.createdAt)),
@@ -403,6 +409,9 @@ adminRouter.get('/overview', async (req, res) => {
       db.select().from(projectAgreements).where(eq(projectAgreements.isDeleted, false)).orderBy(desc(projectAgreements.createdAt)),
       db.select().from(razorpayPaymentLinks).orderBy(desc(razorpayPaymentLinks.createdAt)).limit(250),
       getOrCreateAgreementSettings().catch(() => null),
+      listActiveServicesCatalog().catch(() => []),
+      db.select().from(serviceRecords).orderBy(desc(serviceRecords.createdAt)),
+      db.select().from(customerCarts),
     ]);
 
     const publicCustomersRows = (publicCustReady ? await listPublicCustomers().catch(() => []) : []) || [];
@@ -781,6 +790,9 @@ adminRouter.get('/overview', async (req, res) => {
       projectAgreements: allProjectAgreements,
       razorpayPaymentLinks: allPaymentLinks,
       agreementSettings: activeAgreementSettings,
+      serviceCatalog,
+      serviceRecords: allServiceRecords,
+      customerCartsCount: allCustomerCarts.filter((c) => Array.isArray(c.items) && c.items.length > 0).length,
     });
   } catch (error) {
     console.error('Admin overview error:', error);
@@ -4782,8 +4794,18 @@ adminRouter.patch('/crm/leads/:id', async (req: AuthRequest, res) => {
 
 adminRouter.delete('/crm/leads/:id', async (req: AuthRequest, res) => {
   try {
-    await db.update(crmLeads).set({ isDeleted: true, updatedAt: new Date() }).where(eq(crmLeads.id, Number(req.params.id)));
-    res.json({ ok: true });
+    const id = Number(req.params.id);
+    const archivedReason = String(req.body?.reason || req.query?.reason || 'Archived by Admin').trim();
+    await db.update(crmLeads).set({ isDeleted: true, updatedAt: new Date() }).where(eq(crmLeads.id, id));
+    await logAudit({
+      actorUid: req.dbUser!.uid,
+      actorEmail: req.dbUser!.email,
+      action: 'ARCHIVE_CRM_LEAD',
+      entityType: 'crm_lead',
+      entityId: id,
+      details: { archivedReason },
+    });
+    res.json({ ok: true, archivedReason });
   } catch {
     res.status(500).json({ error: 'Failed to archive lead.' });
   }

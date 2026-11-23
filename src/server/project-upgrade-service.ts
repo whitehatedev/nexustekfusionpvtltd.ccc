@@ -20,7 +20,12 @@ import {
 } from '../db/schema.ts';
 import { isSupabaseStorageConfigured, uploadAgreementPdfToSupabase } from '../lib/supabase-admin.ts';
 import { dispatchAdminNotificationEmail, dispatchLifecycleEmail } from './email.ts';
-import { ProjectAgreementDocumentModel, renderProjectAgreementPdfBuffer } from './pdf-storage.ts';
+import {
+  generateAndStoreFinalProjectInvoicePdf,
+  generateAndStoreInstallmentReceiptPdf,
+  ProjectAgreementDocumentModel,
+  renderProjectAgreementPdfBuffer,
+} from './pdf-storage.ts';
 import { notifyAdmins } from './project-lifecycle.ts';
 import { syncProjectAgreementToSupabase } from './supabase-ecommerce.ts';
 import {
@@ -624,30 +629,56 @@ export async function recordInstallmentPayment(params: {
     }
   }
 
-  // Receipt entry
-  await db.insert(paymentReceipts).values({
-    receiptNumber: `RCP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
-    paymentRef: tx.transactionRef,
-    userId: proj.userId,
-    entityType: 'project_installment',
-    entityId: updatedInst.id,
-    paymentStage: params.installmentNumber === 1 ? 'advance' : 'final',
-    amountInr: safeAmt,
-    amountPaise: safeAmt * 100,
-    razorpayPaymentId: params.razorpayPaymentId || tx.transactionRef,
-    payload: {
-      projectCode: proj.projectCode,
-      installmentNumber: params.installmentNumber,
-      installmentTitle: updatedInst.title,
-      paymentMethod: tx.paymentMethod,
-    },
-  }).catch(() => {});
-
   const [enq] = await db
     .select()
     .from(projectEnquiries)
     .where(eq(projectEnquiries.id, proj.enquiryId))
     .limit(1);
+
+  const [createdReceipt] = await db
+    .insert(paymentReceipts)
+    .values({
+      receiptNumber: `RCP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+      paymentRef: tx.transactionRef,
+      userId: proj.userId,
+      projectId: proj.id,
+      installmentId: updatedInst.id,
+      entityType: 'project_installment',
+      entityId: updatedInst.id,
+      paymentStage: params.installmentNumber === 1 ? 'advance' : 'final',
+      amountInr: safeAmt,
+      amountPaise: safeAmt * 100,
+      razorpayPaymentId: params.razorpayPaymentId || tx.transactionRef,
+      storageBucket: 'payment-receipts',
+      payload: {
+        projectCode: proj.projectCode,
+        projectTitle: proj.title,
+        customerName: enq?.customerName || '',
+        customerEmail: enq?.customerEmail || '',
+        installmentNumber: params.installmentNumber,
+        installmentTitle: updatedInst.title,
+        paymentMethod: tx.paymentMethod,
+        totalProjectCostInr: totalProjectCost,
+        totalPaidToDateInr: totalPaid,
+        remainingBalanceInr: pendingAmount,
+      },
+    })
+    .returning();
+
+  if (createdReceipt?.id) {
+    await generateAndStoreInstallmentReceiptPdf({ receiptId: createdReceipt.id }).catch((err) => {
+      console.warn('[Receipt PDF] Generation warning:', (err as Error)?.message);
+    });
+  }
+
+  let finalInvoiceRecord: any = null;
+  if (pendingAmount <= 0 || (firstPaid && secondPaid)) {
+    const finRes = await generateAndStoreFinalProjectInvoicePdf({ projectId: proj.id }).catch((err) => {
+      console.warn('[Final Invoice PDF] Generation warning:', (err as Error)?.message);
+      return null;
+    });
+    finalInvoiceRecord = finRes?.invoice || null;
+  }
 
   if (proj.userId) {
     await db.insert(notifications).values({
@@ -745,7 +776,13 @@ export async function recordInstallmentPayment(params: {
     }),
   ]);
 
-  return { transaction: tx, installment: updatedInst, project: updatedProject };
+  return {
+    transaction: tx,
+    installment: updatedInst,
+    project: updatedProject,
+    receipt: createdReceipt,
+    finalInvoice: finalInvoiceRecord,
+  };
 }
 
 export async function sendInstallmentPaymentReminder(params: {

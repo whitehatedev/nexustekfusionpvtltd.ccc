@@ -16,6 +16,7 @@ import {
   projectMessages,
   projectQuotations,
   projects,
+  serviceRecords,
   siteSettings,
   storeOrders,
   supportTickets,
@@ -47,6 +48,12 @@ import {
   uploadSupportFileToSupabase,
 } from '../../lib/supabase-admin.ts';
 import { recordEntityStatusChange } from '../record-history.ts';
+import { emitCustomerStreamEvent } from '../customer-realtime.ts';
+import {
+  createOrSyncServiceRecord,
+  listActiveServicesCatalog,
+  updateServiceRecordByAdmin,
+} from '../service-records-service.ts';
 import {
   createMemoryUploadMiddleware,
   createNotification,
@@ -975,6 +982,17 @@ adminOperationsRouter.patch('/enquiries/:source/:id', async (req: AuthRequest, r
           adminEmail: req.dbUser!.email,
           originalRecord: existing as unknown as Record<string, unknown>,
         });
+        if (existing.userId) {
+          await createNotification({
+            userId: existing.userId,
+            title: `Enquiry ${updated.enquiryNumber}: ${updated.status}`,
+            message:
+              status === 'Rejected' && cleanReason
+                ? `Your enquiry was marked Rejected: ${cleanReason}`
+                : cleanReason || updated.internalNotes || `Status updated to ${updated.status}.`,
+            link: '/my-account?tab=enquiries',
+          }).catch(() => {});
+        }
       }
       syncProductEnquiryToSupabase({
         enquiryNumber: updated.enquiryNumber,
@@ -1022,6 +1040,17 @@ adminOperationsRouter.patch('/enquiries/:source/:id', async (req: AuthRequest, r
           adminEmail: req.dbUser!.email,
           originalRecord: existing as unknown as Record<string, unknown>,
         });
+        if (existing.userId) {
+          await createNotification({
+            userId: existing.userId,
+            title: `Ticket ${updated.ticketNumber}: ${updated.status}`,
+            message:
+              status === 'Rejected' && cleanReason
+                ? `Marked Rejected: ${cleanReason}`
+                : cleanReason || updated.internalNotes || `Status updated to ${updated.status}.`,
+            link: '/my-account?tab=enquiries',
+          }).catch(() => {});
+        }
       }
       syncSupportTicketToSupabase({
         ticketNumber: updated.ticketNumber,
@@ -1068,6 +1097,26 @@ adminOperationsRouter.patch('/enquiries/:source/:id', async (req: AuthRequest, r
           adminEmail: req.dbUser!.email,
           originalRecord: existing as unknown as Record<string, unknown>,
         });
+        await db
+          .update(serviceRecords)
+          .set({
+            status: updated.status,
+            ...(cleanReason ? { adminRemarks: cleanReason } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(serviceRecords.sourceEntityId, updated.enquiryNumber))
+          .catch(() => {});
+        if (existing.userId) {
+          await createNotification({
+            userId: existing.userId,
+            title: `Project Enquiry ${updated.enquiryNumber}: ${updated.status}`,
+            message:
+              status === 'Rejected' && cleanReason
+                ? `Project enquiry rejected: ${cleanReason}`
+                : cleanReason || updated.internalNotes || `Status updated to ${updated.status}.`,
+            link: '/my-account?tab=enquiries',
+          }).catch(() => {});
+        }
       }
       emitAdminStreamEvent({ type: 'enquiry', action: 'updated', id: updated.enquiryNumber });
       return res.json({ ok: true, updated });
@@ -1106,6 +1155,26 @@ adminOperationsRouter.patch('/enquiries/:source/:id', async (req: AuthRequest, r
           adminEmail: req.dbUser!.email,
           originalRecord: existing as unknown as Record<string, unknown>,
         });
+        await db
+          .update(serviceRecords)
+          .set({
+            status: updated.status,
+            ...(cleanReason ? { adminRemarks: cleanReason } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(serviceRecords.sourceEntityId, updated.enquiryNumber))
+          .catch(() => {});
+        if (existing.userId) {
+          await createNotification({
+            userId: existing.userId,
+            title: `PCB Enquiry ${updated.enquiryNumber}: ${updated.status}`,
+            message:
+              status === 'Rejected' && cleanReason
+                ? `PCB enquiry rejected: ${cleanReason}`
+                : cleanReason || updated.adminNotes || `Status updated to ${updated.status}.`,
+            link: '/my-account?tab=enquiries',
+          }).catch(() => {});
+        }
       }
       syncPcbEnquiryToSupabase({
         enquiryNumber: updated.enquiryNumber,
@@ -1156,6 +1225,26 @@ adminOperationsRouter.patch('/enquiries/:source/:id', async (req: AuthRequest, r
           adminEmail: req.dbUser!.email,
           originalRecord: existing as unknown as Record<string, unknown>,
         });
+        await db
+          .update(serviceRecords)
+          .set({
+            status: updated.status,
+            ...(cleanReason ? { adminRemarks: cleanReason } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(serviceRecords.sourceEntityId, updated.enquiryNumber))
+          .catch(() => {});
+        if (existing.userId) {
+          await createNotification({
+            userId: existing.userId,
+            title: `B2B RFQ ${updated.enquiryNumber}: ${updated.status}`,
+            message:
+              status === 'Rejected' && cleanReason
+                ? `B2B RFQ rejected: ${cleanReason}`
+                : cleanReason || updated.adminNotes || `Status updated to ${updated.status}.`,
+            link: '/my-account?tab=enquiries',
+          }).catch(() => {});
+        }
       }
       syncB2bEnquiryToSupabase({
         enquiryNumber: updated.enquiryNumber,
@@ -1213,6 +1302,14 @@ adminOperationsRouter.delete('/enquiries/:source/:id', async (req: AuthRequest, 
         adminEmail: req.dbUser!.email,
         originalRecord: existing as unknown as Record<string, unknown>,
       });
+      if (existing.userId) {
+        await createNotification({
+          userId: existing.userId,
+          title: `Enquiry ${existing.enquiryNumber} Archived`,
+          message: `Reason: ${reason}. Full record remains saved in your Enquiry History.`,
+          link: '/my-account?tab=enquiries',
+        }).catch(() => {});
+      }
       return res.json({ archived: true, updated: archived });
     }
 
@@ -1239,6 +1336,14 @@ adminOperationsRouter.delete('/enquiries/:source/:id', async (req: AuthRequest, 
         adminEmail: req.dbUser!.email,
         originalRecord: existing as unknown as Record<string, unknown>,
       });
+      if (existing.userId) {
+        await createNotification({
+          userId: existing.userId,
+          title: `Ticket ${existing.ticketNumber} Archived`,
+          message: `Reason: ${reason}. Full record remains saved in your Enquiry History.`,
+          link: '/my-account?tab=enquiries',
+        }).catch(() => {});
+      }
       return res.json({ archived: true, updated: archived });
     }
 
@@ -1265,6 +1370,19 @@ adminOperationsRouter.delete('/enquiries/:source/:id', async (req: AuthRequest, 
         adminEmail: req.dbUser!.email,
         originalRecord: existing as unknown as Record<string, unknown>,
       });
+      await db
+        .update(serviceRecords)
+        .set({ isDeleted: true, archivedAt: now, archivedReason: reason, archivedBy: req.dbUser!.email, status: 'Archived', updatedAt: now })
+        .where(eq(serviceRecords.sourceEntityId, existing.enquiryNumber))
+        .catch(() => {});
+      if (existing.userId) {
+        await createNotification({
+          userId: existing.userId,
+          title: `Project Enquiry ${existing.enquiryNumber} Archived`,
+          message: `Reason: ${reason}. Full record remains saved in your Enquiry History.`,
+          link: '/my-account?tab=enquiries',
+        }).catch(() => {});
+      }
       return res.json({ archived: true, updated: archived });
     }
 
@@ -1291,6 +1409,19 @@ adminOperationsRouter.delete('/enquiries/:source/:id', async (req: AuthRequest, 
         adminEmail: req.dbUser!.email,
         originalRecord: existing as unknown as Record<string, unknown>,
       });
+      await db
+        .update(serviceRecords)
+        .set({ isDeleted: true, archivedAt: now, archivedReason: reason, archivedBy: req.dbUser!.email, status: 'Archived', updatedAt: now })
+        .where(eq(serviceRecords.sourceEntityId, existing.enquiryNumber))
+        .catch(() => {});
+      if (existing.userId) {
+        await createNotification({
+          userId: existing.userId,
+          title: `PCB Enquiry ${existing.enquiryNumber} Archived`,
+          message: `Reason: ${reason}. Full record remains saved in your Enquiry History.`,
+          link: '/my-account?tab=enquiries',
+        }).catch(() => {});
+      }
       return res.json({ archived: true, updated: archived });
     }
 
@@ -1317,6 +1448,19 @@ adminOperationsRouter.delete('/enquiries/:source/:id', async (req: AuthRequest, 
         adminEmail: req.dbUser!.email,
         originalRecord: existing as unknown as Record<string, unknown>,
       });
+      await db
+        .update(serviceRecords)
+        .set({ isDeleted: true, archivedAt: now, archivedReason: reason, archivedBy: req.dbUser!.email, status: 'Archived', updatedAt: now })
+        .where(eq(serviceRecords.sourceEntityId, existing.enquiryNumber))
+        .catch(() => {});
+      if (existing.userId) {
+        await createNotification({
+          userId: existing.userId,
+          title: `B2B RFQ ${existing.enquiryNumber} Archived`,
+          message: `Reason: ${reason}. Full record remains saved in your Enquiry History.`,
+          link: '/my-account?tab=enquiries',
+        }).catch(() => {});
+      }
       return res.json({ archived: true, updated: archived });
     }
 
@@ -1929,5 +2073,163 @@ adminOperationsRouter.get('/invoices/export', async (req, res) => {
     res.send(csv);
   } catch {
     res.status(500).json({ error: 'Failed to export billing CSV.' });
+  }
+});
+
+// Unified Service Records Management (Admin View, Create, Assign, Remarks, Pricing, Soft-Archive)
+adminOperationsRouter.get('/service-records', async (req, res) => {
+  try {
+    const includeArchived = req.query.includeArchived !== 'false';
+    const category = String(req.query.category || '').trim();
+    const status = String(req.query.status || '').trim();
+    const [allRows, catalog] = await Promise.all([
+      db.select().from(serviceRecords).orderBy(desc(serviceRecords.createdAt)),
+      listActiveServicesCatalog(),
+    ]);
+    const filtered = allRows.filter((r) => {
+      if (!includeArchived && r.isDeleted) return false;
+      if (category && category !== 'all' && r.category !== category) return false;
+      if (status && status !== 'all' && r.status !== status) return false;
+      return true;
+    });
+    res.json({ serviceRecords: filtered, services: catalog });
+  } catch (error) {
+    console.error('Admin service records list error:', error);
+    res.status(500).json({ error: 'Failed to load service records.' });
+  }
+});
+
+adminOperationsRouter.post('/service-records', async (req: AuthRequest, res) => {
+  try {
+    const b = req.body || {};
+    const serviceName = String(b.serviceName || '').trim();
+    const category = String(b.category || 'Engineering').trim();
+    if (serviceName.length < 2) {
+      return res.status(400).json({ error: 'Service name is required.' });
+    }
+
+    let resolvedUserId = b.userId ? Number(b.userId) : null;
+    let resolvedUid = '';
+    let resolvedCustomerId = String(b.customerId || '').trim();
+    let resolvedEmail = String(b.customerEmail || '').trim().toLowerCase();
+
+    if (!resolvedUserId && resolvedEmail) {
+      const [matchedUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, resolvedEmail))
+        .limit(1);
+      if (matchedUser) {
+        resolvedUserId = matchedUser.id;
+        resolvedUid = matchedUser.uid;
+        resolvedCustomerId = resolvedCustomerId || matchedUser.uid;
+      }
+    } else if (resolvedUserId) {
+      const [matchedUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, resolvedUserId))
+        .limit(1);
+      if (matchedUser) {
+        resolvedUid = matchedUser.uid;
+        resolvedEmail = resolvedEmail || matchedUser.email;
+        resolvedCustomerId = resolvedCustomerId || matchedUser.uid;
+      }
+    }
+
+    const record = await createOrSyncServiceRecord({
+      serviceCode: b.serviceCode ? String(b.serviceCode) : undefined,
+      userId: resolvedUserId,
+      userUid: resolvedUid,
+      customerId: resolvedCustomerId,
+      customerEmail: resolvedEmail,
+      serviceName,
+      category,
+      description: String(b.description || ''),
+      specifications: String(b.specifications || ''),
+      selectedOptions: b.selectedOptions && typeof b.selectedOptions === 'object' ? b.selectedOptions : {},
+      quantity: Math.max(1, Number(b.quantity || 1)),
+      unitPriceInr: Number(b.unitPriceInr || 0),
+      taxInr: Number(b.taxInr || 0),
+      totalAmountInr: Number(b.totalAmountInr || 0),
+      status: String(b.status || 'Pending'),
+      adminRemarks: String(b.adminRemarks || ''),
+      assignedTeam: String(b.assignedTeam || ''),
+      sourceEntityType: String(b.sourceEntityType || 'admin_created'),
+      sourceEntityId: String(b.sourceEntityId || generateCode('NTF-ADM-SRV')),
+    });
+
+    await logAudit({
+      actorUid: req.dbUser!.uid,
+      actorEmail: req.dbUser!.email,
+      action: 'CREATE_SERVICE_RECORD',
+      entityType: 'service_record',
+      entityId: record.serviceRecordNumber,
+      details: { serviceName: record.serviceName, customerId: record.customerId },
+    });
+
+    if (resolvedUserId) {
+      emitCustomerStreamEvent(resolvedUserId, {
+        type: 'service_record',
+        action: 'created',
+        id: record.serviceRecordNumber,
+        summary: record.serviceName,
+      });
+    }
+
+    res.status(201).json({ serviceRecord: record });
+  } catch (error) {
+    console.error('Admin create service record error:', error);
+    res.status(500).json({ error: 'Failed to create service record.' });
+  }
+});
+
+adminOperationsRouter.patch('/service-records/:id', async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid service record ID.' });
+    }
+    const b = req.body || {};
+    const updated = await updateServiceRecordByAdmin({
+      id,
+      status: b.status !== undefined ? String(b.status) : undefined,
+      adminRemarks: b.adminRemarks !== undefined ? String(b.adminRemarks) : undefined,
+      assignedTeam: b.assignedTeam !== undefined ? String(b.assignedTeam) : undefined,
+      unitPriceInr: b.unitPriceInr !== undefined ? Number(b.unitPriceInr) : undefined,
+      taxInr: b.taxInr !== undefined ? Number(b.taxInr) : undefined,
+      totalAmountInr: b.totalAmountInr !== undefined ? Number(b.totalAmountInr) : undefined,
+      archive: Boolean(b.archive),
+      archivedReason: b.archivedReason ? String(b.archivedReason) : undefined,
+      adminUid: req.dbUser!.uid,
+      adminEmail: req.dbUser!.email,
+    });
+    if (!updated) return res.status(404).json({ error: 'Service record not found.' });
+    res.json({ serviceRecord: updated });
+  } catch (error) {
+    console.error('Admin update service record error:', error);
+    res.status(500).json({ error: 'Failed to update service record.' });
+  }
+});
+
+adminOperationsRouter.delete('/service-records/:id', async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid service record ID.' });
+    }
+    const reason = String(req.body?.reason || req.query?.reason || 'Archived by Administrator').trim();
+    const updated = await updateServiceRecordByAdmin({
+      id,
+      archive: true,
+      archivedReason: reason,
+      adminUid: req.dbUser!.uid,
+      adminEmail: req.dbUser!.email,
+    });
+    if (!updated) return res.status(404).json({ error: 'Service record not found.' });
+    res.json({ archived: true, serviceRecord: updated });
+  } catch (error) {
+    console.error('Admin archive service record error:', error);
+    res.status(500).json({ error: 'Failed to archive service record.' });
   }
 });

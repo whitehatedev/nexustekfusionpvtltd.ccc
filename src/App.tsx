@@ -319,6 +319,13 @@ const AppRouter: React.FC = () => {
         </AdminRouteGuard>
       );
     }
+    if (normalized === '/admin/document-settings') {
+      return (
+        <AdminRouteGuard>
+          <AdminDashboardPage initialTab="document_settings" />
+        </AdminRouteGuard>
+      );
+    }
     if (normalized === '/admin/farmers') {
       return (
         <AdminRouteGuard>

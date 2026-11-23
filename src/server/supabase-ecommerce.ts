@@ -159,25 +159,47 @@ export async function syncCartToSupabase(
     productId?: number;
     sku?: string;
     name?: string;
+    imageUrl?: string;
     unitPriceInr?: number;
+    gstPercent?: number;
     qty?: number;
     variant?: string;
     color?: string;
   }>,
-  customerCode?: string
+  customerCode?: string,
+  summary?: {
+    couponCode?: string;
+    subtotalInr?: number;
+    gstInr?: number;
+    discountInr?: number;
+    shippingInr?: number;
+    grandTotalInr?: number;
+  }
 ) {
   const client = getWriteClient();
   if (!client || !userUid) return;
   try {
     const nowIso = new Date().toISOString();
-    await client.from('customer_carts').upsert(
+    const { error: cartErr } = await client.from('customer_carts').upsert(
       {
         user_uid: userUid,
         items,
+        coupon_code: summary?.couponCode || '',
+        subtotal_inr: summary?.subtotalInr ?? 0,
+        gst_inr: summary?.gstInr ?? 0,
+        discount_inr: summary?.discountInr ?? 0,
+        shipping_inr: summary?.shippingInr ?? 0,
+        grand_total_inr: summary?.grandTotalInr ?? 0,
         updated_at: nowIso,
       },
       { onConflict: 'user_uid' }
     );
+    if (cartErr && /column .* does not exist|schema cache/i.test(cartErr.message || '')) {
+      await client.from('customer_carts').upsert(
+        { user_uid: userUid, items, updated_at: nowIso },
+        { onConflict: 'user_uid' }
+      );
+    }
 
     const { data: cartRow } = await client
       .from('customer_carts')
@@ -188,21 +210,48 @@ export async function syncCartToSupabase(
     if (cartRow?.id) {
       await client.from('customer_cart_items').delete().eq('cart_id', cartRow.id);
       if (items.length > 0) {
-        await client.from('customer_cart_items').insert(
-          items.map((it) => ({
+        const mappedItems = items.map((it) => {
+          const qty = Math.max(1, Number(it.qty || 1));
+          const unit = Number(it.unitPriceInr || 0);
+          return {
             cart_id: cartRow.id,
             user_uid: userUid,
             customer_id: customerCode || (userUid.startsWith('NTF-CUST-') ? userUid : ''),
             product_id: Number(it.productId || 0),
             product_sku: String(it.sku || ''),
             product_name: String(it.name || ''),
+            image_url: String(it.imageUrl || ''),
+            selected_options: {
+              ...(it.variant ? { variant: String(it.variant) } : {}),
+              ...(it.color ? { color: String(it.color) } : {}),
+            },
             variant: String(it.variant || ''),
             color: String(it.color || ''),
-            quantity: Math.max(1, Number(it.qty || 1)),
-            unit_price_inr: Number(it.unitPriceInr || 0),
+            quantity: qty,
+            unit_price_inr: unit,
+            gst_percent: Number(it.gstPercent ?? 18),
+            line_total_inr: unit * qty,
             updated_at: nowIso,
-          }))
-        );
+          };
+        });
+        const { error: itemErr } = await client.from('customer_cart_items').insert(mappedItems);
+        if (itemErr && /column .* does not exist|schema cache/i.test(itemErr.message || '')) {
+          await client.from('customer_cart_items').insert(
+            items.map((it) => ({
+              cart_id: cartRow.id,
+              user_uid: userUid,
+              customer_id: customerCode || (userUid.startsWith('NTF-CUST-') ? userUid : ''),
+              product_id: Number(it.productId || 0),
+              product_sku: String(it.sku || ''),
+              product_name: String(it.name || ''),
+              variant: String(it.variant || ''),
+              color: String(it.color || ''),
+              quantity: Math.max(1, Number(it.qty || 1)),
+              unit_price_inr: Number(it.unitPriceInr || 0),
+              updated_at: nowIso,
+            }))
+          );
+        }
       }
     }
   } catch {
@@ -1153,6 +1202,199 @@ export async function syncRazorpayPaymentLinkToSupabase(link: {
     // Non-blocking sync
   }
 }
+
+export async function syncGuestCartToSupabase(guest: {
+  guestTokenHash: string;
+  items: unknown[];
+  couponCode?: string;
+  expiresAt: Date | string;
+}) {
+  const client = getWriteClient();
+  if (!client || !guest.guestTokenHash) return;
+  try {
+    await client.from('guest_carts').upsert(
+      {
+        guest_token_hash: guest.guestTokenHash,
+        items: guest.items || [],
+        coupon_code: guest.couponCode || '',
+        expires_at: new Date(guest.expiresAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'guest_token_hash' }
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function deleteGuestCartFromSupabase(guestTokenHash: string) {
+  const client = getWriteClient();
+  if (!client || !guestTokenHash) return;
+  try {
+    await client.from('guest_carts').delete().eq('guest_token_hash', guestTokenHash);
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function syncServicesCatalogToSupabase(
+  rows: Array<{
+    serviceCode: string;
+    name: string;
+    slug: string;
+    category: string;
+    description: string;
+    basePriceInr: number;
+    gstPercent: number;
+    options?: Record<string, unknown>;
+    isActive: boolean;
+  }>
+) {
+  const client = getWriteClient();
+  if (!client || rows.length === 0) return;
+  try {
+    await client.from('services').upsert(
+      rows.map((r) => ({
+        service_code: r.serviceCode,
+        name: r.name,
+        slug: r.slug,
+        category: r.category,
+        description: r.description,
+        base_price_inr: r.basePriceInr,
+        gst_percent: r.gstPercent,
+        options: r.options || {},
+        is_active: r.isActive,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'service_code' }
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function syncServiceRecordToSupabase(rec: {
+  serviceRecordNumber: string;
+  userUid?: string;
+  customerId?: string;
+  customerEmail?: string;
+  serviceCode?: string;
+  serviceName: string;
+  category: string;
+  description?: string;
+  specifications?: string;
+  selectedOptions?: Record<string, unknown>;
+  uploadedFiles?: unknown[];
+  quantity?: number;
+  unitPriceInr?: number;
+  taxInr?: number;
+  totalAmountInr?: number;
+  status: string;
+  adminRemarks?: string;
+  assignedTeam?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  isDeleted?: boolean;
+  archivedAt?: Date | string | null;
+  archivedReason?: string;
+  archivedBy?: string;
+}) {
+  const client = getWriteClient();
+  if (!client || !rec.serviceRecordNumber) return;
+  try {
+    await client.from('service_records').upsert(
+      {
+        service_record_number: rec.serviceRecordNumber,
+        user_uid: rec.userUid || '',
+        customer_id: rec.customerId || '',
+        customer_email: rec.customerEmail || '',
+        service_code: rec.serviceCode || '',
+        service_name: rec.serviceName,
+        category: rec.category,
+        description: rec.description || '',
+        specifications: rec.specifications || '',
+        selected_options: rec.selectedOptions || {},
+        uploaded_files: rec.uploadedFiles || [],
+        quantity: rec.quantity ?? 1,
+        unit_price_inr: rec.unitPriceInr ?? 0,
+        tax_inr: rec.taxInr ?? 0,
+        total_amount_inr: rec.totalAmountInr ?? 0,
+        status: rec.status,
+        admin_remarks: rec.adminRemarks || '',
+        assigned_team: rec.assignedTeam || '',
+        source_entity_type: rec.sourceEntityType || 'custom_service',
+        source_entity_id: rec.sourceEntityId || '',
+        is_deleted: Boolean(rec.isDeleted),
+        archived_at: rec.archivedAt ? new Date(rec.archivedAt).toISOString() : null,
+        archived_reason: rec.archivedReason || '',
+        archived_by: rec.archivedBy || '',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'service_record_number' }
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function syncEnquiryAttachmentToSupabase(att: {
+  enquirySource: string;
+  enquiryId: number;
+  enquiryNumber?: string;
+  userUid?: string;
+  customerId?: string;
+  fileName: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  storageBucket?: string;
+  storagePath: string;
+  uploadedBy?: string;
+}) {
+  const client = getWriteClient();
+  if (!client || !att.storagePath) return;
+  try {
+    await client.from('enquiry_attachments').insert({
+      enquiry_source: att.enquirySource,
+      enquiry_id: att.enquiryId,
+      enquiry_number: att.enquiryNumber || '',
+      user_uid: att.userUid || '',
+      customer_id: att.customerId || '',
+      file_name: att.fileName,
+      mime_type: att.mimeType || 'application/octet-stream',
+      size_bytes: att.sizeBytes ?? 0,
+      storage_bucket: att.storageBucket || 'customer-uploads',
+      storage_path: att.storagePath,
+      uploaded_by: att.uploadedBy || '',
+    });
+  } catch {
+    // Non-blocking sync
+  }
+}
+
+export async function syncAdminAuditLogToSupabase(entry: {
+  actorUid: string;
+  actorEmail: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  details?: Record<string, unknown>;
+}) {
+  const client = getWriteClient();
+  if (!client) return;
+  try {
+    await client.from('admin_activity_logs').insert({
+      actor_uid: entry.actorUid,
+      actor_email: entry.actorEmail,
+      action: entry.action,
+      entity_type: entry.entityType,
+      entity_id: entry.entityId,
+      details: entry.details || {},
+    });
+  } catch {
+    // Non-blocking sync
+  }
+}
+
 
 
 

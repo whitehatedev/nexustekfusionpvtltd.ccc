@@ -290,6 +290,66 @@ export interface CartItem {
   color?: string;
 }
 
+export interface CartSummary {
+  itemCount: number;
+  subtotalInr: number;
+  gstInr: number;
+  discountInr: number;
+  shippingInr: number;
+  freeShippingAboveInr: number;
+  grandTotalInr: number;
+  couponCode: string;
+}
+
+export interface CloudServiceCatalogItem {
+  id: number;
+  serviceCode: string;
+  name: string;
+  slug: string;
+  category: string;
+  description: string;
+  basePriceInr: number;
+  gstPercent: number;
+  options?: Record<string, unknown>;
+  isActive: boolean;
+}
+
+export interface ServiceRecordItem {
+  id: number;
+  serviceRecordNumber: string;
+  serviceId?: number | null;
+  userId?: number | null;
+  customerId: string;
+  customerEmail: string;
+  serviceName: string;
+  category: string;
+  description: string;
+  specifications: string;
+  selectedOptions?: Record<string, unknown>;
+  uploadedFiles?: Array<{
+    originalName: string;
+    storagePath: string;
+    bucket?: string;
+    sizeBytes?: number;
+    mimeType?: string;
+  }>;
+  quantity: number;
+  unitPriceInr: number;
+  taxInr: number;
+  totalAmountInr: number;
+  status: string;
+  adminRemarks: string;
+  assignedTeam: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  isDeleted: boolean;
+  archivedAt?: string | null;
+  archivedReason?: string;
+  archivedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BlogPost {
   id: number;
   title: string;

@@ -1,7 +1,9 @@
 import { db } from '../db/index.ts';
 import { auditLogs, customerActivityLogs, recordStatusHistory } from '../db/schema.ts';
+import { emitCustomerStreamEvent } from './customer-realtime.ts';
 import {
   syncActivityLogToSupabase,
+  syncAdminAuditLogToSupabase,
   syncRecordStatusHistoryToSupabase,
 } from './supabase-ecommerce.ts';
 
@@ -127,6 +129,37 @@ export async function recordEntityStatusChange(params: {
         newStatus: params.newStatus,
         reason: params.reason || '',
       },
+    });
+  }
+
+  syncAdminAuditLogToSupabase({
+    actorUid: params.adminId || params.adminEmail,
+    actorEmail: params.adminEmail,
+    action: `${params.actionType.toUpperCase()}_${params.entityType.toUpperCase()}`,
+    entityType: params.entityType,
+    entityId: params.entityCode || entityIdStr,
+    details: {
+      previousStatus: params.previousStatus,
+      newStatus: params.newStatus,
+      reason: params.reason || '',
+      customerId: params.customerId || '',
+      ...(params.metadata || {}),
+    },
+  }).catch(() => {});
+
+  if (params.userId) {
+    const streamType = params.entityType.includes('service')
+      ? 'service_record'
+      : params.entityType.includes('order')
+        ? 'order'
+        : params.entityType.includes('project')
+          ? 'project'
+          : 'enquiry';
+    emitCustomerStreamEvent(params.userId, {
+      type: streamType,
+      action: params.actionType,
+      id: params.entityCode || entityIdStr,
+      summary: `${params.newStatus}${params.reason ? `: ${params.reason}` : ''}`,
     });
   }
 

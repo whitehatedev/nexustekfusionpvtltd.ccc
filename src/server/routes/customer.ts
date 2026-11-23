@@ -17,6 +17,7 @@ import {
   customers,
   dronePilots,
   droneRepairBookings,
+  enquiryAttachments,
   farmers,
   invoices,
   notifications,
@@ -90,6 +91,7 @@ import {
   syncB2bEnquiryToSupabase,
   syncCartToSupabase,
   syncCustomerAddressToSupabase,
+  syncEnquiryAttachmentToSupabase,
   syncInvoiceToSupabase,
   syncNotificationToSupabase,
   syncPaymentToSupabase,
@@ -121,12 +123,25 @@ import {
   recordInstallmentPayment,
 } from '../project-upgrade-service.ts';
 import {
+  generateAndStoreInstallmentReceiptPdf,
   generateAndStoreInvoicePdf,
   type ProjectAgreementDocumentModel,
   renderProjectAgreementPdfBuffer,
 } from '../pdf-storage.ts';
 import { recordEntityStatusChange } from '../record-history.ts';
 import { emitAdminStreamEvent } from '../admin-realtime.ts';
+import { emitCustomerStreamEvent, subscribeCustomerStream } from '../customer-realtime.ts';
+import {
+  clearGuestCartState,
+  getCustomerCartState,
+  mergeGuestCartIntoCustomer,
+  saveCustomerCartState,
+} from '../cart-service.ts';
+import {
+  createOrSyncServiceRecord,
+  listActiveServicesCatalog,
+  listCustomerServiceRecords,
+} from '../service-records-service.ts';
 import {
   createMemoryUploadMiddleware,
   createNotification,
@@ -214,100 +229,7 @@ async function logCustomerActivity(
   }).catch(() => {});
 }
 
-async function enrichCartSnapshot(rawItems: any[]) {
-  const safeRaw = Array.isArray(rawItems) ? rawItems.slice(0, 60) : [];
-  const productIds = Array.from(
-    new Set(
-      safeRaw
-        .map((it) => Number(it?.productId ?? it?.product?.id ?? 0))
-        .filter((id) => Number.isFinite(id) && id > 0)
-    )
-  );
-  const productRows =
-    productIds.length > 0
-      ? await db
-          .select()
-          .from(products)
-          .where(and(inArray(products.id, productIds), eq(products.isDeleted, false)))
-      : [];
-  const productMap = new Map(productRows.map((p) => [p.id, p]));
-
-  const snapshot: Array<{
-    productId: number;
-    slug: string;
-    sku: string;
-    name: string;
-    imageUrl: string;
-    unitPriceInr: number;
-    gstPercent: number;
-    qty: number;
-    variant?: string;
-    color?: string;
-    stockQty: number;
-  }> = [];
-
-  for (const it of safeRaw) {
-    const pid = Number(it?.productId ?? it?.product?.id ?? 0);
-    if (!Number.isFinite(pid) || pid <= 0) continue;
-    const prod = productMap.get(pid);
-    const effectivePrice = prod
-      ? prod.discountPriceInr !== null && prod.discountPriceInr < prod.priceInr
-        ? prod.discountPriceInr
-        : prod.priceInr
-      : Math.max(0, Number(it?.unitPriceInr || 0));
-    snapshot.push({
-      productId: pid,
-      slug: prod?.slug || String(it?.slug || ''),
-      sku: prod?.sku || String(it?.sku || ''),
-      name: prod?.name || String(it?.name || `Product #${pid}`),
-      imageUrl: prod?.imageUrl || String(it?.imageUrl || ''),
-      unitPriceInr: effectivePrice,
-      gstPercent: prod?.gstPercent ?? Number(it?.gstPercent ?? 18),
-      qty: Math.max(1, Math.floor(Number(it?.qty || 1))),
-      variant: it?.variant ? String(it.variant) : undefined,
-      color: it?.color ? String(it.color) : undefined,
-      stockQty: prod?.stockQty ?? Math.max(0, Number(it?.stockQty || 0)),
-    });
-  }
-
-  return { snapshot, productMap };
-}
-
-async function hydrateCartItems(rawItems: any[]) {
-  const { snapshot, productMap } = await enrichCartSnapshot(rawItems);
-  return snapshot.map((s) => {
-    const prod = productMap.get(s.productId);
-    const product = prod || {
-      id: s.productId,
-      slug: s.slug || `product-${s.productId}`,
-      sku: s.sku,
-      hsnCode: '',
-      name: s.name,
-      category: 'Hardware',
-      subCategory: '',
-      description: '',
-      specs: {},
-      priceInr: s.unitPriceInr,
-      discountPriceInr: null,
-      gstPercent: s.gstPercent,
-      stockQty: s.stockQty,
-      productType: 'ready_to_buy' as const,
-      imageUrl: s.imageUrl,
-      galleryImages: [],
-      tags: [],
-      isPublished: true,
-      isFeatured: false,
-      ratingAvg: 5,
-      reviewCount: 0,
-    };
-    return {
-      product,
-      qty: s.qty,
-      ...(s.variant ? { variant: s.variant } : {}),
-      ...(s.color ? { color: s.color } : {}),
-    };
-  });
-}
+// Cart hydration/summary helpers live in ../cart-service.ts
 
 const modelUpload = createOriginal3DModelMemoryUploadMiddleware(80);
 const projectUpload = createMemoryUploadMiddleware(
@@ -384,10 +306,17 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
       myProductEnquiries,
       myReviews,
       myActivityLogs,
-      myCartRows,
+      cartState,
       myAgreements,
       myPaymentLinks,
       myRecordHistory,
+      serviceCatalog,
+      myServiceRecords,
+      archivedProjEnq,
+      archivedProdEnq,
+      archivedPcbEnq,
+      archivedB2bEnq,
+      archivedTickets,
     ] = await Promise.all([
       db.select().from(customerAddresses).where(eq(customerAddresses.userId, userId)).orderBy(desc(customerAddresses.isDefault)),
       db.select().from(storeOrders).where(and(eq(storeOrders.userId, userId), eq(storeOrders.isDeleted, false))).orderBy(desc(storeOrders.createdAt)),
@@ -419,10 +348,17 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
         .orderBy(desc(productEnquiries.createdAt)),
       db.select().from(productReviews).where(eq(productReviews.userId, userId)).orderBy(desc(productReviews.createdAt)),
       db.select().from(customerActivityLogs).where(eq(customerActivityLogs.userId, userId)).orderBy(desc(customerActivityLogs.createdAt)).limit(50),
-      db.select().from(customerCarts).where(eq(customerCarts.userId, userId)).limit(1),
+      getCustomerCartState(userId),
       db.select().from(projectAgreements).where(and(eq(projectAgreements.userId, userId), eq(projectAgreements.isDeleted, false))).orderBy(desc(projectAgreements.createdAt)),
       db.select().from(razorpayPaymentLinks).where(eq(razorpayPaymentLinks.userId, userId)).orderBy(desc(razorpayPaymentLinks.createdAt)),
       db.select().from(recordStatusHistory).where(eq(recordStatusHistory.userId, userId)).orderBy(desc(recordStatusHistory.actionDate)).limit(60),
+      listActiveServicesCatalog(),
+      listCustomerServiceRecords(userId),
+      db.select().from(projectEnquiries).where(and(eq(projectEnquiries.userId, userId), eq(projectEnquiries.isDeleted, true))).orderBy(desc(projectEnquiries.archivedAt)),
+      db.select().from(productEnquiries).where(and(eq(productEnquiries.isDeleted, true), or(eq(productEnquiries.userId, userId), eq(productEnquiries.email, req.dbUser!.email)))).orderBy(desc(productEnquiries.archivedAt)),
+      db.select().from(pcbEnquiries).where(and(eq(pcbEnquiries.userId, userId), eq(pcbEnquiries.isDeleted, true))).orderBy(desc(pcbEnquiries.archivedAt)),
+      db.select().from(b2bEnquiries).where(and(eq(b2bEnquiries.userId, userId), eq(b2bEnquiries.isDeleted, true))).orderBy(desc(b2bEnquiries.archivedAt)),
+      db.select().from(supportTickets).where(and(eq(supportTickets.userId, userId), eq(supportTickets.isDeleted, true))).orderBy(desc(supportTickets.archivedAt)),
     ]);
 
     const enquiryIds = myEnquiries.map((e) => e.id);
@@ -434,7 +370,6 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
       allAcceptances,
       allDeliveries,
       allMessages,
-      hydratedCart,
       allProjPayments,
       allInstallments,
       allTransactions,
@@ -447,7 +382,6 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
       enquiryIds.length > 0 ? db.select().from(projectAcceptances).orderBy(desc(projectAcceptances.acceptedAt)) : Promise.resolve([]),
       projectIds.length > 0 ? db.select().from(projectDeliveryRecords).orderBy(desc(projectDeliveryRecords.createdAt)) : Promise.resolve([]),
       enquiryIds.length > 0 ? db.select().from(projectMessages).orderBy(desc(projectMessages.createdAt)) : Promise.resolve([]),
-      hydrateCartItems(myCartRows[0]?.items || []),
       projectIds.length > 0 ? db.select().from(projectPayments).where(inArray(projectPayments.projectId, projectIds)) : Promise.resolve([]),
       projectIds.length > 0 ? db.select().from(paymentInstallments).where(inArray(paymentInstallments.projectId, projectIds)) : Promise.resolve([]),
       projectIds.length > 0 ? db.select().from(paymentTransactions).where(inArray(paymentTransactions.projectId, projectIds)).orderBy(desc(paymentTransactions.createdAt)) : Promise.resolve([]),
@@ -520,7 +454,9 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
       },
       availableProfiles: profilesData?.activeProfiles || [],
       addresses,
-      cartItems: hydratedCart,
+      cartItems: cartState.items,
+      cartRawItems: cartState.rawItems,
+      cartSummary: cartState.summary,
       storeOrders: myStoreOrders,
       printingOrders: enrichedPrintOrders,
       projectEnquiries: myEnquiries,
@@ -538,6 +474,15 @@ customerRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
       pcbEnquiries: myPcb,
       b2bEnquiries: myB2b,
       droneRepairs: myRepairs,
+      serviceCatalog,
+      serviceRecords: myServiceRecords,
+      archivedEnquiries: {
+        projectEnquiries: archivedProjEnq,
+        productEnquiries: archivedProdEnq,
+        pcbEnquiries: archivedPcbEnq,
+        b2bEnquiries: archivedB2bEnq,
+        supportTickets: archivedTickets,
+      },
       payments: myPayments,
       invoices: myInvoices,
       agreements: myAgreements,
@@ -879,16 +824,11 @@ customerRouter.delete('/me', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Persistent Customer Cart Sync (Supabase + PostgreSQL) with full product hydration
+// Persistent Customer Cart Sync (Supabase + PostgreSQL) with full product hydration & summary
 customerRouter.get('/cart', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const [row] = await db
-      .select()
-      .from(customerCarts)
-      .where(eq(customerCarts.userId, req.dbUser!.id))
-      .limit(1);
-    const hydrated = await hydrateCartItems(row?.items || []);
-    res.json({ items: hydrated, rawItems: row?.items || [] });
+    const state = await getCustomerCartState(req.dbUser!.id);
+    res.json(state);
   } catch (error) {
     console.error('Load saved cart error:', error);
     res.status(500).json({ error: 'Failed to load saved cart.' });
@@ -898,37 +838,238 @@ customerRouter.get('/cart', requireAuth, async (req: AuthRequest, res) => {
 customerRouter.put('/cart', requireAuth, async (req: AuthRequest, res) => {
   try {
     const incoming = Array.isArray(req.body?.items) ? req.body.items : [];
-    const { snapshot } = await enrichCartSnapshot(incoming);
-
-    const [existing] = await db
-      .select()
-      .from(customerCarts)
-      .where(eq(customerCarts.userId, req.dbUser!.id))
-      .limit(1);
-
-    if (existing) {
-      await db
-        .update(customerCarts)
-        .set({ items: snapshot, updatedAt: new Date() })
-        .where(eq(customerCarts.id, existing.id));
-    } else {
-      await db.insert(customerCarts).values({
-        userId: req.dbUser!.id,
-        items: snapshot,
-      });
-    }
-
-    syncCartToSupabase(
-      req.dbUser!.uid,
-      snapshot,
-      req.activeCustomerId || req.dbUser!.customerId
-    ).catch(() => {});
-
-    const hydrated = await hydrateCartItems(snapshot);
-    res.json({ items: hydrated, rawItems: snapshot });
+    const couponCode = req.body?.couponCode !== undefined ? String(req.body.couponCode || '') : undefined;
+    const saved = await saveCustomerCartState({
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId,
+      rawItems: incoming,
+      couponCode,
+    });
+    res.json(saved);
   } catch (error) {
     console.error('Save cart error:', error);
     res.status(500).json({ error: 'Failed to save cart.' });
+  }
+});
+
+customerRouter.post('/cart/items', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const productId = Number(req.body?.productId || req.body?.product?.id || 0);
+    const qty = Math.max(1, Math.floor(Number(req.body?.qty || 1)));
+    const variant = req.body?.variant ? String(req.body.variant) : undefined;
+    const color = req.body?.color ? String(req.body.color) : undefined;
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return res.status(400).json({ error: 'Valid productId is required.' });
+    }
+    const current = await getCustomerCartState(req.dbUser!.id);
+    const saved = await saveCustomerCartState({
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId,
+      rawItems: [...current.rawItems, { productId, qty, variant, color }],
+      couponCode: current.summary.couponCode,
+    });
+    res.json(saved);
+  } catch (error) {
+    console.error('Cart add item error:', error);
+    res.status(500).json({ error: 'Failed to add item to cart.' });
+  }
+});
+
+customerRouter.patch('/cart/items', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const productId = Number(req.body?.productId || 0);
+    const qty = Math.floor(Number(req.body?.qty || 0));
+    const variant = req.body?.variant ? String(req.body.variant) : undefined;
+    const color = req.body?.color ? String(req.body.color) : undefined;
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return res.status(400).json({ error: 'Valid productId is required.' });
+    }
+    const current = await getCustomerCartState(req.dbUser!.id);
+    const nextRaw =
+      qty <= 0
+        ? current.rawItems.filter(
+            (i) => !(i.productId === productId && i.variant === variant && i.color === color)
+          )
+        : current.rawItems.map((i) =>
+            i.productId === productId && i.variant === variant && i.color === color
+              ? { ...i, qty }
+              : i
+          );
+    const saved = await saveCustomerCartState({
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId,
+      rawItems: nextRaw,
+      couponCode: current.summary.couponCode,
+    });
+    res.json(saved);
+  } catch (error) {
+    console.error('Cart patch item error:', error);
+    res.status(500).json({ error: 'Failed to update cart item.' });
+  }
+});
+
+customerRouter.delete('/cart/items', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const clearAll = req.query.clear === '1' || req.query.clear === 'true';
+    const productId = Number(req.query.productId || req.body?.productId || 0);
+    const variant = req.query.variant
+      ? String(req.query.variant)
+      : req.body?.variant
+        ? String(req.body.variant)
+        : undefined;
+    const color = req.query.color
+      ? String(req.query.color)
+      : req.body?.color
+        ? String(req.body.color)
+        : undefined;
+    const current = await getCustomerCartState(req.dbUser!.id);
+    const nextRaw =
+      clearAll || !productId
+        ? []
+        : current.rawItems.filter(
+            (i) => !(i.productId === productId && i.variant === variant && i.color === color)
+          );
+    const saved = await saveCustomerCartState({
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId,
+      rawItems: nextRaw,
+      couponCode: clearAll ? '' : current.summary.couponCode,
+    });
+    res.json(saved);
+  } catch (error) {
+    console.error('Cart delete item error:', error);
+    res.status(500).json({ error: 'Failed to remove cart item.' });
+  }
+});
+
+customerRouter.post('/cart/merge', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const extraItems = Array.isArray(req.body?.extraItems) ? req.body.extraItems : [];
+    const merged = await mergeGuestCartIntoCustomer({
+      req,
+      res,
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId,
+      extraItems,
+    });
+    res.json(merged);
+  } catch (error) {
+    console.error('Cart merge error:', error);
+    res.status(500).json({ error: 'Failed to merge guest cart.' });
+  }
+});
+
+// Real-time Customer Dashboard SSE Stream (fallback alongside Supabase Realtime)
+customerRouter.get('/customer/stream', requireAuth, (req: AuthRequest, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  res.write(
+    `data: ${JSON.stringify({
+      type: 'profile',
+      action: 'connected',
+      timestamp: new Date().toISOString(),
+    })}\n\n`
+  );
+
+  const unsubscribe = subscribeCustomerStream(req.dbUser!.id, (evt) => {
+    try {
+      res.write(`data: ${JSON.stringify(evt)}\n\n`);
+    } catch {
+      // Ignore closed stream writes
+    }
+  });
+
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      // Ignore closed stream writes
+    }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    unsubscribe();
+    res.end();
+  });
+});
+
+// Customer Unified Service Records (3D Printing, PCB, Projects, Drone Repair, Custom Requests)
+customerRouter.get('/service-records', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const [records, catalog] = await Promise.all([
+      listCustomerServiceRecords(req.dbUser!.id),
+      listActiveServicesCatalog(),
+    ]);
+    res.json({ serviceRecords: records, services: catalog });
+  } catch (error) {
+    console.error('List service records error:', error);
+    res.status(500).json({ error: 'Failed to load service records.' });
+  }
+});
+
+customerRouter.post('/service-records', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const b = req.body || {};
+    const serviceName = String(b.serviceName || '').trim();
+    const category = String(b.category || 'Engineering').trim();
+    const specifications = String(b.specifications || '').trim();
+    const description = String(b.description || '').trim();
+    if (serviceName.length < 3) {
+      return res.status(400).json({ error: 'Service name is required.' });
+    }
+    const quantity = Math.max(1, Math.floor(Number(b.quantity || 1)));
+    const record = await createOrSyncServiceRecord({
+      serviceCode: b.serviceCode ? String(b.serviceCode) : undefined,
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: req.activeCustomerId || req.dbUser!.customerId || req.dbUser!.uid,
+      customerEmail: req.dbUser!.email,
+      serviceName,
+      category,
+      description,
+      specifications,
+      selectedOptions: b.selectedOptions && typeof b.selectedOptions === 'object' ? b.selectedOptions : {},
+      uploadedFiles: Array.isArray(b.uploadedFiles) ? b.uploadedFiles : [],
+      quantity,
+      unitPriceInr: Number(b.unitPriceInr || 0),
+      taxInr: Number(b.taxInr || 0),
+      totalAmountInr: Number(b.totalAmountInr || 0),
+      status: 'Pending',
+      sourceEntityType: 'custom_service',
+      sourceEntityId: generateCode('NTF-REQ'),
+    });
+
+    await Promise.all([
+      createNotification({
+        userId: req.dbUser!.id,
+        title: `Service Request ${record.serviceRecordNumber} Logged`,
+        message: `${record.serviceName} (${record.category}) has been saved to your account.`,
+        link: '/my-account?tab=services',
+      }),
+      notifyAdmins({
+        type: 'project',
+        entityType: 'service_record',
+        entityId: record.serviceRecordNumber,
+        customerId: req.activeCustomerId || req.dbUser!.customerId || '',
+        title: `New Service Request — ${record.serviceRecordNumber}`,
+        message: `${req.dbUser!.fullName || req.dbUser!.email} requested ${record.serviceName}.`,
+        link: '/admin/service-records',
+      }),
+    ]);
+
+    res.status(201).json({ serviceRecord: record });
+  } catch (error) {
+    console.error('Create service record error:', error);
+    res.status(500).json({ error: 'Failed to create service request.' });
   }
 });
 
@@ -1620,6 +1761,41 @@ customerRouter.post('/3d-printing/orders', requireAuth, async (req: AuthRequest,
       { fileName: order.fileName, materialName: order.materialName, totalInr: order.totalInr }
     );
 
+    createOrSyncServiceRecord({
+      serviceCode: 'SRV-3DP',
+      userId: req.dbUser!.id,
+      userUid: req.dbUser!.uid,
+      customerId: resolvedCustomerId,
+      customerEmail: resolvedEmail,
+      serviceName: `3D Printing — ${order.fileName}`,
+      category: 'Manufacturing',
+      description: `${order.technology} · ${order.materialName} (${order.colorName})`,
+      specifications: `Layer ${order.layerHeightMm}mm, Infill ${order.infillPercent}%, ${order.finishingOption}`,
+      selectedOptions: {
+        technology: order.technology,
+        materialName: order.materialName,
+        colorName: order.colorName,
+        layerHeightMm: order.layerHeightMm,
+        infillPercent: order.infillPercent,
+        finishingOption: order.finishingOption,
+      },
+      uploadedFiles: [
+        {
+          originalName: order.fileName,
+          storagePath: order.fileStoragePath,
+          bucket: order.storageBucket,
+          sizeBytes: order.fileSizeBytes,
+        },
+      ],
+      quantity: order.quantity,
+      unitPriceInr: Math.round(order.totalInr / Math.max(1, order.quantity)),
+      taxInr: order.pricingBreakdown?.gstInr ?? 0,
+      totalAmountInr: order.totalInr,
+      status: order.orderStatus,
+      sourceEntityType: 'printing_order',
+      sourceEntityId: order.orderNumber,
+    }).catch(() => {});
+
     res.status(201).json({ order });
   } catch (error) {
     console.error('Create 3D print order error:', error);
@@ -2167,6 +2343,39 @@ customerRouter.get('/invoices/:id/download', requireAuth, async (req: AuthReques
   }
 });
 
+customerRouter.get('/receipts/:id/download', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [rcp] = await db.select().from(paymentReceipts).where(eq(paymentReceipts.id, id)).limit(1);
+    if (!rcp) return res.status(404).json({ error: 'Payment receipt not found.' });
+
+    const isAdmin = ADMIN_ROLES.has(req.dbUser!.role);
+    if (!isAdmin && rcp.userId !== req.dbUser!.id) {
+      return res.status(403).json({ error: 'Not authorized to access this payment receipt.' });
+    }
+
+    let buffer: Buffer | null = null;
+    if (rcp.pdfStoragePath && isSupabaseStorageConfigured()) {
+      buffer = await downloadFromSupabaseStorage(rcp.storageBucket || 'payment-receipts', rcp.pdfStoragePath);
+    }
+    if (!buffer) {
+      const generated = await generateAndStoreInstallmentReceiptPdf({ receiptId: rcp.id });
+      buffer = generated?.buffer || null;
+    }
+    if (!buffer) {
+      return res.status(500).json({ error: 'Failed to generate payment receipt PDF.' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(rcp.receiptNumber)}.pdf"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error('Receipt PDF download error:', error);
+    res.status(500).json({ error: 'Failed to download payment receipt PDF.' });
+  }
+});
+
 // Project Agreements: Customer Download, Digital Acceptance & Upload Signed PDF
 customerRouter.get('/agreements/:id/download', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -2629,6 +2838,26 @@ customerRouter.post(
         attachmentCategories = [];
       }
 
+      const dedupCutoff = new Date(Date.now() - 60 * 1000);
+      const recentProjDup = await db
+        .select()
+        .from(projectEnquiries)
+        .where(
+          and(
+            eq(projectEnquiries.userId, req.dbUser!.id),
+            eq(projectEnquiries.projectTitle, String(b.projectTitle).trim()),
+            gte(projectEnquiries.createdAt, dedupCutoff)
+          )
+        )
+        .limit(1);
+      if (recentProjDup.length > 0) {
+        return res.status(200).json({
+          deduplicated: true,
+          enquiry: recentProjDup[0],
+          projectRegistrationId: recentProjDup[0].enquiryNumber,
+        });
+      }
+
       const enquiryNumber = generateCode('NTF-ENQ');
       if (files.length > 0 && !isSupabaseStorageConfigured()) {
         return res.status(503).json({
@@ -2814,6 +3043,64 @@ customerRouter.post(
       syncProjectRegistrationToSupabase({
         enquiry,
         userUid: req.dbUser!.uid,
+      }).catch(() => {});
+
+      if (attachments.length > 0) {
+        for (const att of attachments) {
+          db.insert(enquiryAttachments)
+            .values({
+              enquirySource: 'project',
+              enquiryId: enquiry.id,
+              enquiryNumber: enquiry.enquiryNumber,
+              userId: req.dbUser!.id,
+              customerId: enquiry.customerId || '',
+              fileName: att.originalName,
+              mimeType: att.mimeType,
+              sizeBytes: att.sizeBytes,
+              storageBucket: att.bucket,
+              storagePath: att.storagePath,
+              uploadedBy: req.dbUser!.email,
+            })
+            .catch(() => {});
+          syncEnquiryAttachmentToSupabase({
+            enquirySource: 'project',
+            enquiryId: enquiry.id,
+            enquiryNumber: enquiry.enquiryNumber,
+            userUid: req.dbUser!.uid,
+            customerId: enquiry.customerId || '',
+            fileName: att.originalName,
+            mimeType: att.mimeType,
+            sizeBytes: att.sizeBytes,
+            storageBucket: att.bucket,
+            storagePath: att.storagePath,
+            uploadedBy: req.dbUser!.email,
+          }).catch(() => {});
+        }
+      }
+
+      createOrSyncServiceRecord({
+        serviceCode: 'SRV-CUSTOM-ENG',
+        userId: req.dbUser!.id,
+        userUid: req.dbUser!.uid,
+        customerId: enquiry.customerId || req.activeCustomerId || req.dbUser!.customerId || req.dbUser!.uid,
+        customerEmail: enquiry.customerEmail || req.dbUser!.email,
+        serviceName: `Project Development — ${enquiry.projectTitle}`,
+        category: 'Engineering',
+        description: enquiry.projectDescription,
+        specifications: `${enquiry.projectCategory} · ${enquiry.engineeringDomain}`,
+        selectedOptions: {
+          projectCategory: enquiry.projectCategory,
+          complexityLevel: enquiry.complexityLevel,
+          estimatedBudget: enquiry.estimatedBudget,
+          requiresPhysicalPrototype: enquiry.requiresPhysicalPrototype,
+          requiresWebOrMobileApp: enquiry.requiresWebOrMobileApp,
+          requiresDocumentation: enquiry.requiresDocumentation,
+        },
+        uploadedFiles: attachments,
+        quantity: 1,
+        status: enquiry.status,
+        sourceEntityType: 'project_enquiry',
+        sourceEntityId: enquiry.enquiryNumber,
       }).catch(() => {});
 
       res.status(201).json({ enquiry, projectRegistrationId: enquiry.enquiryNumber });
@@ -3177,6 +3464,23 @@ customerRouter.post(
         })
       );
 
+      const pcbCutoff = new Date(Date.now() - 60 * 1000);
+      const recentPcbDup = await db
+        .select()
+        .from(pcbEnquiries)
+        .where(
+          and(
+            eq(pcbEnquiries.userId, req.dbUser!.id),
+            eq(pcbEnquiries.boardDimensionsMm, String(b.boardDimensionsMm).trim()),
+            eq(pcbEnquiries.layerCount, Number(b.layerCount || 2)),
+            gte(pcbEnquiries.createdAt, pcbCutoff)
+          )
+        )
+        .limit(1);
+      if (recentPcbDup.length > 0) {
+        return res.status(200).json({ deduplicated: true, enquiry: recentPcbDup[0] });
+      }
+
       const enquiryNumber = generateCode('NTF-PCB');
       const [created] = await db
         .insert(pcbEnquiries)
@@ -3215,6 +3519,58 @@ customerRouter.post(
           link: '/admin/enquiries',
         }),
       ]);
+
+      for (const att of attachments) {
+        db.insert(enquiryAttachments)
+          .values({
+            enquirySource: 'pcb',
+            enquiryId: created.id,
+            enquiryNumber: created.enquiryNumber,
+            userId: req.dbUser!.id,
+            customerId: created.customerId || '',
+            fileName: att.originalName,
+            sizeBytes: att.sizeBytes,
+            storageBucket: att.bucket,
+            storagePath: att.storagePath,
+            uploadedBy: created.email,
+          })
+          .catch(() => {});
+        syncEnquiryAttachmentToSupabase({
+          enquirySource: 'pcb',
+          enquiryId: created.id,
+          enquiryNumber: created.enquiryNumber,
+          userUid: req.dbUser!.uid,
+          customerId: created.customerId || '',
+          fileName: att.originalName,
+          sizeBytes: att.sizeBytes,
+          storageBucket: att.bucket,
+          storagePath: att.storagePath,
+          uploadedBy: created.email,
+        }).catch(() => {});
+      }
+
+      createOrSyncServiceRecord({
+        serviceCode: 'SRV-PCB',
+        userId: req.dbUser!.id,
+        userUid: req.dbUser!.uid,
+        customerId: created.customerId || req.activeCustomerId || req.dbUser!.customerId || req.dbUser!.uid,
+        customerEmail: created.email,
+        serviceName: `PCB Fabrication — ${created.layerCount}L (${created.boardDimensionsMm} mm)`,
+        category: 'PCB',
+        description: created.specialInstructions || `${created.layerCount}-Layer ${created.surfaceFinish} PCB`,
+        specifications: `${created.boardDimensionsMm} mm · ${created.surfaceFinish} · Assembly: ${created.assemblyRequired ? 'Yes' : 'No'}`,
+        selectedOptions: {
+          layerCount: created.layerCount,
+          boardDimensionsMm: created.boardDimensionsMm,
+          surfaceFinish: created.surfaceFinish,
+          assemblyRequired: created.assemblyRequired,
+        },
+        uploadedFiles: attachments,
+        quantity: created.boardQuantity,
+        status: created.status,
+        sourceEntityType: 'pcb_enquiry',
+        sourceEntityId: created.enquiryNumber,
+      }).catch(() => {});
 
       syncPcbEnquiryToSupabase({
         enquiryNumber: created.enquiryNumber,
@@ -3286,6 +3642,23 @@ customerRouter.post(
         })
       );
 
+      const b2bCutoff = new Date(Date.now() - 60 * 1000);
+      const recentB2bDup = await db
+        .select()
+        .from(b2bEnquiries)
+        .where(
+          and(
+            eq(b2bEnquiries.userId, req.dbUser!.id),
+            eq(b2bEnquiries.companyName, String(b.companyName).trim()),
+            eq(b2bEnquiries.requirementCategory, String(b.requirementCategory || 'Bulk Hardware')),
+            gte(b2bEnquiries.createdAt, b2bCutoff)
+          )
+        )
+        .limit(1);
+      if (recentB2bDup.length > 0) {
+        return res.status(200).json({ deduplicated: true, enquiry: recentB2bDup[0] });
+      }
+
       const enquiryNumber = generateCode('NTF-B2B');
       const [created] = await db
         .insert(b2bEnquiries)
@@ -3325,6 +3698,57 @@ customerRouter.post(
           link: '/admin/enquiries',
         }),
       ]);
+
+      for (const att of attachments) {
+        db.insert(enquiryAttachments)
+          .values({
+            enquirySource: 'b2b',
+            enquiryId: created.id,
+            enquiryNumber: created.enquiryNumber,
+            userId: req.dbUser!.id,
+            customerId: created.customerId || '',
+            fileName: att.originalName,
+            sizeBytes: att.sizeBytes,
+            storageBucket: att.bucket,
+            storagePath: att.storagePath,
+            uploadedBy: created.email,
+          })
+          .catch(() => {});
+        syncEnquiryAttachmentToSupabase({
+          enquirySource: 'b2b',
+          enquiryId: created.id,
+          enquiryNumber: created.enquiryNumber,
+          userUid: req.dbUser!.uid,
+          customerId: created.customerId || '',
+          fileName: att.originalName,
+          sizeBytes: att.sizeBytes,
+          storageBucket: att.bucket,
+          storagePath: att.storagePath,
+          uploadedBy: created.email,
+        }).catch(() => {});
+      }
+
+      createOrSyncServiceRecord({
+        serviceCode: 'SRV-B2B-MFG',
+        userId: req.dbUser!.id,
+        userUid: req.dbUser!.uid,
+        customerId: created.customerId || req.activeCustomerId || req.dbUser!.customerId || req.dbUser!.uid,
+        customerEmail: created.email,
+        serviceName: `B2B RFQ — ${created.requirementCategory}`,
+        category: 'B2B',
+        description: created.technicalSpecs,
+        specifications: `${created.companyName} · Delivery: ${created.shippingLocation}`,
+        selectedOptions: {
+          gstin: created.gstin,
+          expectedDeliveryDate: created.expectedDeliveryDate,
+          shippingLocation: created.shippingLocation,
+        },
+        uploadedFiles: attachments,
+        quantity: created.quantity,
+        status: created.status,
+        sourceEntityType: 'b2b_enquiry',
+        sourceEntityId: created.enquiryNumber,
+      }).catch(() => {});
 
       syncB2bEnquiryToSupabase({
         enquiryNumber: created.enquiryNumber,
@@ -3597,6 +4021,8 @@ customerRouter.post('/payments/verify', requireAuth, async (req: AuthRequest, re
         installment: rec.installment,
         transaction: rec.transaction,
         project: rec.project,
+        receipt: rec.receipt,
+        finalInvoice: rec.finalInvoice,
       });
     }
 
@@ -3674,6 +4100,20 @@ customerRouter.post('/payments/verify', requireAuth, async (req: AuthRequest, re
         })
         .where(eq(storeOrders.id, existingOrd.id))
         .returning();
+
+      saveCustomerCartState({
+        userId: req.dbUser!.id,
+        userUid: req.dbUser!.uid,
+        customerId: req.activeCustomerId || req.dbUser!.customerId,
+        rawItems: [],
+        couponCode: '',
+      }).catch(() => {});
+      clearGuestCartState(req, res).catch(() => {});
+      emitCustomerStreamEvent(req.dbUser!.id, {
+        type: 'cart',
+        action: 'cleared',
+        id: order.orderNumber,
+      });
 
       amountInr = order.totalInr;
       gstInr = order.gstInr;
@@ -4368,6 +4808,54 @@ customerRouter.post(
         })
         .returning();
 
+      await Promise.all([
+        createNotification({
+          userId: req.dbUser!.id,
+          title: `Drone Repair ${booking.referenceNumber} Booked`,
+          message: `${booking.droneBrandModel} diagnostics scheduled (${booking.serviceMode}).`,
+          link: '/my-account?tab=services',
+        }),
+        notifyAdmins({
+          type: 'enquiry',
+          entityType: 'drone_repair',
+          entityId: booking.referenceNumber,
+          customerId: req.activeCustomerId || req.dbUser!.customerId || '',
+          title: `New Drone Repair Booking — ${booking.referenceNumber}`,
+          message: `${booking.customerName} (${booking.droneBrandModel}): ${booking.problemDescription.slice(0, 100)}`,
+          link: '/admin/service-records',
+        }),
+      ]);
+
+      createOrSyncServiceRecord({
+        serviceCode: 'SRV-DRONE-REPAIR',
+        userId: req.dbUser!.id,
+        userUid: req.dbUser!.uid,
+        customerId: req.activeCustomerId || req.dbUser!.customerId || req.dbUser!.uid,
+        customerEmail: booking.email,
+        serviceName: `Drone Repair — ${booking.droneBrandModel}`,
+        category: 'Drone Services',
+        description: booking.problemDescription,
+        specifications: `${booking.droneType} · Mode: ${booking.serviceMode}`,
+        selectedOptions: {
+          serviceMode: booking.serviceMode,
+          droneType: booking.droneType,
+          preferredDate: booking.preferredDate,
+          preferredTime: booking.preferredTime,
+        },
+        uploadedFiles: [...photos, ...(videoFile ? [videoFile] : [])],
+        quantity: 1,
+        status: booking.status,
+        sourceEntityType: 'drone_repair',
+        sourceEntityId: booking.referenceNumber,
+      }).catch(() => {});
+
+      emitAdminStreamEvent({
+        type: 'enquiry',
+        action: 'created',
+        id: booking.referenceNumber,
+        summary: booking.droneBrandModel,
+      });
+
       res.status(201).json({ booking });
     } catch (error: any) {
       console.error('Drone repair create error:', error);
@@ -4388,6 +4876,22 @@ customerRouter.post('/support-tickets', requireAuth, async (req: AuthRequest, re
     }
     if (message.length < 5) {
       return res.status(400).json({ error: 'Please enter details of your support request.' });
+    }
+
+    const tktCutoff = new Date(Date.now() - 60 * 1000);
+    const recentTkt = await db
+      .select()
+      .from(supportTickets)
+      .where(
+        and(
+          eq(supportTickets.userId, req.dbUser!.id),
+          eq(supportTickets.subject, subject),
+          gte(supportTickets.createdAt, tktCutoff)
+        )
+      )
+      .limit(1);
+    if (recentTkt.length > 0 && String(recentTkt[0].message || '').trim() === message) {
+      return res.status(200).json({ deduplicated: true, ticket: recentTkt[0] });
     }
 
     const ticketNumber = generateCode('NTF-TKT');

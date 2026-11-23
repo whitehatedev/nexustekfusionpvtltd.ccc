@@ -252,3 +252,36 @@ ALTER TABLE web_platform.payment_transactions ENABLE ROW LEVEL SECURITY;
 INSERT INTO storage.buckets (id, name, public) VALUES ('project-attachments', 'project-attachments', FALSE) ON CONFLICT (id) DO NOTHING;
 INSERT INTO storage.buckets (id, name, public) VALUES ('project-agreements', 'project-agreements', FALSE) ON CONFLICT (id) DO NOTHING;
 INSERT INTO storage.buckets (id, name, public) VALUES ('company-assets', 'company-assets', FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('payment-receipts', 'payment-receipts', FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('project-invoices', 'project-invoices', FALSE) ON CONFLICT (id) DO NOTHING;
+
+-- 9. document_settings (A4 Letterhead, Company Stamp & Signature placement)
+CREATE TABLE IF NOT EXISTS web_platform.document_settings (
+  id SERIAL PRIMARY KEY,
+  letterhead_file_path TEXT NOT NULL DEFAULT '',
+  letterhead_file_name TEXT NOT NULL DEFAULT '',
+  letterhead_mime_type TEXT NOT NULL DEFAULT '',
+  stamp_file_path TEXT NOT NULL DEFAULT '',
+  stamp_file_name TEXT NOT NULL DEFAULT '',
+  stamp_mime_type TEXT NOT NULL DEFAULT '',
+  signature_file_path TEXT NOT NULL DEFAULT '',
+  signature_file_name TEXT NOT NULL DEFAULT '',
+  signature_mime_type TEXT NOT NULL DEFAULT '',
+  storage_bucket TEXT NOT NULL DEFAULT 'company-assets',
+  stamp_position JSONB NOT NULL DEFAULT '{"preset":"bottom-left","xMm":22,"yMm":238}'::jsonb,
+  stamp_size JSONB NOT NULL DEFAULT '{"widthMm":30,"heightMm":30}'::jsonb,
+  signature_position JSONB NOT NULL DEFAULT '{"preset":"bottom-right","xMm":140,"yMm":244}'::jsonb,
+  signature_size JSONB NOT NULL DEFAULT '{"widthMm":48,"heightMm":20}'::jsonb,
+  updated_by TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE web_platform.document_settings ENABLE ROW LEVEL SECURITY;
+
+-- Extend payment_receipts for PDF cloud storage tracking
+ALTER TABLE web_platform.payment_receipts ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES web_platform.projects(id) ON DELETE SET NULL;
+ALTER TABLE web_platform.payment_receipts ADD COLUMN IF NOT EXISTS installment_id INTEGER;
+ALTER TABLE web_platform.payment_receipts ADD COLUMN IF NOT EXISTS storage_bucket TEXT NOT NULL DEFAULT 'payment-receipts';
+ALTER TABLE web_platform.payment_receipts ADD COLUMN IF NOT EXISTS pdf_storage_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE web_platform.payment_receipts ADD COLUMN IF NOT EXISTS pdf_generated_at TIMESTAMPTZ;
+

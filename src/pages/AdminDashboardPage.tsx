@@ -67,6 +67,8 @@ import {
   RecordHistoryAndActivityAdminPanel,
 } from '../components/admin/AdminCloudGovernancePanels';
 import { ProjectPaymentsAndInstallmentsPanel } from '../components/admin/ProjectPaymentsAndInstallmentsPanel';
+import { DocumentInvoiceSettingsPanel } from '../components/admin/DocumentInvoiceSettingsPanel';
+import { AdminServiceRecordsPanel } from '../components/admin/AdminServiceRecordsPanel';
 
 const COMPANY_LOGO = '/assets/aistudio/image_1a5ac752.png';
 
@@ -94,10 +96,12 @@ export type AdminTab =
   | 'project_payment_settings'
   | 'printing'
   | 'pcb_b2b'
+  | 'service_records'
   | 'crm'
   | 'rd_projects'
   | 'blogs'
   | 'payments_invoices'
+  | 'document_settings'
   | 'support'
   | 'customers'
   | 'users'
@@ -1408,6 +1412,7 @@ export const AdminDashboardPage: React.FC<{ initialTab?: AdminTab }> = ({ initia
         { id: 'project_payment_settings', label: 'Project Split & Emails', icon: <Settings className="w-4 h-4" /> },
         { id: 'printing', label: '3D Printing Lab', icon: <Printer className="w-4 h-4" /> },
         { id: 'pcb_b2b', label: 'PCB & B2B Quotes', icon: <Cpu className="w-4 h-4" /> },
+        { id: 'service_records', label: 'Service Records', icon: <Wrench className="w-4 h-4" /> },
       ],
     },
     {
@@ -1432,6 +1437,7 @@ export const AdminDashboardPage: React.FC<{ initialTab?: AdminTab }> = ({ initia
         { id: 'rd_projects', label: 'R&D Case Studies', icon: <FileText className="w-4 h-4" /> },
         { id: 'blogs', label: 'Engineering Blogs', icon: <FileText className="w-4 h-4" /> },
         { id: 'payments_invoices', label: 'Payments & Invoices', icon: <CreditCard className="w-4 h-4" /> },
+        { id: 'document_settings', label: 'Document & Invoice Settings', icon: <FileText className="w-4 h-4" /> },
         { id: 'support', label: 'Support & Drone Repairs', icon: <MessageSquare className="w-4 h-4" /> },
       ],
     },
@@ -5168,6 +5174,15 @@ export const AdminDashboardPage: React.FC<{ initialTab?: AdminTab }> = ({ initia
                             agreements={(overview.projectAgreements || []).filter(
                               (ag: any) => ag.projectId === p.id || (p.enquiryId && ag.enquiryId === p.enquiryId)
                             )}
+                            receipts={(overview.receipts || []).filter(
+                              (r: any) =>
+                                r.projectId === p.id ||
+                                r.payload?.projectCode === p.projectCode ||
+                                (p.quotationId && r.entityType === 'project_quotation' && r.entityId === p.quotationId)
+                            )}
+                            invoices={(overview.invoices || []).filter(
+                              (inv: any) => inv.entityType === 'project_final_invoice' && inv.entityId === p.id
+                            )}
                             onRefresh={() => loadAll(true)}
                             onDownloadFile={(storagePath, fileName) => downloadAdminProtectedFile(storagePath, fileName)}
                           />
@@ -6140,6 +6155,9 @@ export const AdminDashboardPage: React.FC<{ initialTab?: AdminTab }> = ({ initia
               </div>
             )}
 
+            {/* ==================== DOCUMENT & INVOICE SETTINGS (LETTERHEAD, STAMP, SIGNATURE) ==================== */}
+            {tab === 'document_settings' && <DocumentInvoiceSettingsPanel />}
+
             {/* ==================== SUPPORT DESK & DRONE REPAIRS ==================== */}
             {tab === 'support' && (
               <div className="space-y-6 text-xs">
@@ -6268,6 +6286,15 @@ export const AdminDashboardPage: React.FC<{ initialTab?: AdminTab }> = ({ initia
             {/* ==================== UNIFIED CUSTOMER ENQUIRIES CENTER ==================== */}
             {tab === 'enquiries' && (
               <AdminEnquiriesPanel
+                realtimeTick={realtimeTick}
+                onViewCustomerProfile={jumpToCustomerProfile}
+                onOverviewRefresh={() => loadAll(true)}
+              />
+            )}
+
+            {/* ==================== UNIFIED CLOUD SERVICE RECORDS ==================== */}
+            {tab === 'service_records' && (
+              <AdminServiceRecordsPanel
                 realtimeTick={realtimeTick}
                 onViewCustomerProfile={jumpToCustomerProfile}
                 onOverviewRefresh={() => loadAll(true)}

@@ -10,6 +10,7 @@ import {
   coupons,
   crmLeads,
   customerAddresses,
+  enquiryAttachments,
   newsletterSubscribers,
   printingMachines,
   printingMaterials,
@@ -48,10 +49,18 @@ import { dispatchLifecycleEmail } from '../email.ts';
 import { notifyAdmins } from '../project-lifecycle.ts';
 import { emitAdminStreamEvent } from '../admin-realtime.ts';
 import {
+  syncEnquiryAttachmentToSupabase,
   syncEnquiryToSupabase,
   syncProductEnquiryToSupabase,
   syncStoreOrderToSupabase,
 } from '../supabase-ecommerce.ts';
+import {
+  clearGuestCartState,
+  getGuestCartState,
+  saveGuestCartState,
+} from '../cart-service.ts';
+import { listActiveServicesCatalog } from '../service-records-service.ts';
+import { emitCustomerStreamEvent } from '../customer-realtime.ts';
 
 export const publicRouter = Router();
 
@@ -547,6 +556,28 @@ publicRouter.post('/product-enquiries', requireCloudDatabase, optionalAuth, asyn
       });
     }
 
+    const idempotencyCutoff = new Date(Date.now() - 60 * 1000);
+    const recentDup = await db
+      .select()
+      .from(productEnquiries)
+      .where(
+        and(
+          eq(productEnquiries.email, email),
+          eq(productEnquiries.interestedProduct, interestedProduct),
+          gte(productEnquiries.createdAt, idempotencyCutoff)
+        )
+      )
+      .limit(1);
+    if (recentDup.length > 0 && String(recentDup[0].message || '').trim() === message) {
+      return res.status(200).json({
+        ok: true,
+        deduplicated: true,
+        enquiryNumber: recentDup[0].enquiryNumber,
+        referenceNumber: recentDup[0].enquiryNumber,
+        enquiry: recentDup[0],
+      });
+    }
+
     const enquiryNumber = generateCode('NTF-DRN');
     const productSlug = String(
       b.productSlug || (interestedProduct.toUpperCase().includes('PRO') ? 'krashivantri-x-pro' : 'krashivantri-x')
@@ -634,6 +665,15 @@ publicRouter.post('/product-enquiries', requireCloudDatabase, optionalAuth, asyn
       message,
       status: 'New',
     }).catch(() => {});
+
+    if (req.dbUser?.id) {
+      emitCustomerStreamEvent(req.dbUser.id, {
+        type: 'enquiry',
+        action: 'created',
+        id: enquiryNumber,
+        summary: interestedProduct,
+      });
+    }
 
     res.status(201).json({ ok: true, enquiryNumber, referenceNumber: enquiryNumber, enquiry: created });
   } catch (error) {
@@ -873,7 +913,27 @@ publicRouter.post('/contact', requireCloudDatabase, optionalAuth, supportUpload.
       return res.status(400).json({ error: 'Name, email, subject, and message are required.' });
     }
 
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanSubject = String(subject).trim();
+    const cleanMessage = String(message).trim();
+    const dedupCutoff = new Date(Date.now() - 60 * 1000);
+    const existingDup = await db
+      .select()
+      .from(supportTickets)
+      .where(
+        and(
+          eq(supportTickets.email, cleanEmail),
+          eq(supportTickets.subject, cleanSubject),
+          gte(supportTickets.createdAt, dedupCutoff)
+        )
+      )
+      .limit(1);
+    if (existingDup.length > 0 && String(existingDup[0].message || '').trim() === cleanMessage) {
+      return res.status(200).json({ deduplicated: true, ticket: existingDup[0] });
+    }
+
     let attachmentPath = '';
+    let attachmentMeta: { name: string; mimeType: string; sizeBytes: number } | null = null;
     if (req.file) {
       if (!isSupabaseStorageConfigured()) {
         return res.status(503).json({
@@ -887,6 +947,11 @@ publicRouter.post('/contact', requireCloudDatabase, optionalAuth, supportUpload.
         ownerUid: req.dbUser?.authUserId || req.dbUser?.uid || req.activeCustomerId || 'public',
       });
       attachmentPath = uploaded.storagePath;
+      attachmentMeta = {
+        name: req.file.originalname,
+        mimeType: req.file.mimetype || 'application/octet-stream',
+        sizeBytes: req.file.size || req.file.buffer.length,
+      };
     }
 
     const ticketNumber = generateCode('NTF-TKT');
@@ -897,24 +962,56 @@ publicRouter.post('/contact', requireCloudDatabase, optionalAuth, supportUpload.
         userId: req.dbUser?.id ?? null,
         customerId: req.activeCustomerId || req.dbUser?.customerId || '',
         name: String(name).trim(),
-        email: String(email).trim(),
+        email: cleanEmail,
         mobile: String(mobile || '').trim(),
-        subject: String(subject).trim(),
+        subject: cleanSubject,
         serviceCategory: String(serviceCategory || 'General').trim(),
         category: String(serviceCategory || 'General Enquiry').trim(),
-        message: String(message).trim(),
+        message: cleanMessage,
         attachmentPath,
         status: 'Open',
         messages: [
           {
             sender: String(name).trim(),
             role: 'customer',
-            text: String(message).trim(),
+            text: cleanMessage,
             timestamp: new Date().toISOString(),
           },
         ],
       })
       .returning();
+
+    if (attachmentPath && attachmentMeta) {
+      await db
+        .insert(enquiryAttachments)
+        .values({
+          enquirySource: 'support',
+          enquiryId: created.id,
+          enquiryNumber: created.ticketNumber,
+          userId: req.dbUser?.id ?? null,
+          customerId: req.activeCustomerId || req.dbUser?.customerId || '',
+          fileName: attachmentMeta.name,
+          mimeType: attachmentMeta.mimeType,
+          sizeBytes: attachmentMeta.sizeBytes,
+          storageBucket: 'customer-uploads',
+          storagePath: attachmentPath,
+          uploadedBy: cleanEmail,
+        })
+        .catch(() => {});
+      syncEnquiryAttachmentToSupabase({
+        enquirySource: 'support',
+        enquiryId: created.id,
+        enquiryNumber: created.ticketNumber,
+        userUid: req.dbUser?.uid || '',
+        customerId: req.activeCustomerId || req.dbUser?.customerId || '',
+        fileName: attachmentMeta.name,
+        mimeType: attachmentMeta.mimeType,
+        sizeBytes: attachmentMeta.sizeBytes,
+        storageBucket: 'customer-uploads',
+        storagePath: attachmentPath,
+        uploadedBy: cleanEmail,
+      }).catch(() => {});
+    }
 
     notifyAdmins({
       type: 'enquiry',
@@ -937,6 +1034,15 @@ publicRouter.post('/contact', requireCloudDatabase, optionalAuth, supportUpload.
       message: created.message,
       status: created.status,
     }).catch(() => {});
+
+    if (req.dbUser?.id) {
+      emitCustomerStreamEvent(req.dbUser.id, {
+        type: 'enquiry',
+        action: 'created',
+        id: created.ticketNumber,
+        summary: created.subject,
+      });
+    }
 
     res.status(201).json({ ticket: created });
   } catch (error) {
@@ -1235,6 +1341,8 @@ publicRouter.post('/express-checkout', requireCloudDatabase, optionalAuth, async
       orderStatus: order.orderStatus,
     }).catch(() => {});
 
+    clearGuestCartState(req, res).catch(() => {});
+
     res.status(201).json({
       order,
       sessionToken,
@@ -1254,5 +1362,119 @@ publicRouter.post('/express-checkout', requireCloudDatabase, optionalAuth, async
   } catch (error: any) {
     console.error('Express checkout error:', error);
     res.status(400).json({ error: error?.message || 'Failed to place express order.' });
+  }
+});
+
+// Unified Services Catalog (seeded from PostgreSQL/Supabase)
+publicRouter.get('/services', async (_req, res) => {
+  try {
+    await ensureInitialSeed();
+    const list = await listActiveServicesCatalog();
+    res.json({ services: list });
+  } catch (error) {
+    console.error('Services catalog error:', error);
+    res.status(500).json({ error: 'Failed to load services catalog.' });
+  }
+});
+
+// Server-side Persistent Guest Cart (HttpOnly signed cookie -> guest_carts table; zero localStorage)
+publicRouter.get('/guest-cart', async (req, res) => {
+  try {
+    const state = await getGuestCartState(req);
+    res.json({ items: state.items, rawItems: state.rawItems, summary: state.summary });
+  } catch (error) {
+    console.error('Guest cart load error:', error);
+    res.status(500).json({ error: 'Failed to load guest cart.' });
+  }
+});
+
+publicRouter.put('/guest-cart', async (req, res) => {
+  try {
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    const couponCode = req.body?.couponCode !== undefined ? String(req.body.couponCode || '') : undefined;
+    const saved = await saveGuestCartState(req, res, rawItems, couponCode);
+    res.json(saved);
+  } catch (error) {
+    console.error('Guest cart save error:', error);
+    res.status(500).json({ error: 'Failed to save guest cart.' });
+  }
+});
+
+publicRouter.post('/guest-cart/items', async (req, res) => {
+  try {
+    const productId = Number(req.body?.productId || req.body?.product?.id || 0);
+    const qty = Math.max(1, Math.floor(Number(req.body?.qty || 1)));
+    const variant = req.body?.variant ? String(req.body.variant) : undefined;
+    const color = req.body?.color ? String(req.body.color) : undefined;
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return res.status(400).json({ error: 'Valid productId is required.' });
+    }
+    const current = await getGuestCartState(req);
+    const nextRaw = [
+      ...current.rawItems,
+      { productId, qty, variant, color },
+    ];
+    const saved = await saveGuestCartState(req, res, nextRaw, current.summary.couponCode);
+    res.json(saved);
+  } catch (error) {
+    console.error('Guest cart add item error:', error);
+    res.status(500).json({ error: 'Failed to add item to guest cart.' });
+  }
+});
+
+publicRouter.patch('/guest-cart/items', async (req, res) => {
+  try {
+    const productId = Number(req.body?.productId || 0);
+    const qty = Math.floor(Number(req.body?.qty || 0));
+    const variant = req.body?.variant ? String(req.body.variant) : undefined;
+    const color = req.body?.color ? String(req.body.color) : undefined;
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return res.status(400).json({ error: 'Valid productId is required.' });
+    }
+    const current = await getGuestCartState(req);
+    const nextRaw =
+      qty <= 0
+        ? current.rawItems.filter(
+            (i) => !(i.productId === productId && i.variant === variant && i.color === color)
+          )
+        : current.rawItems.map((i) =>
+            i.productId === productId && i.variant === variant && i.color === color
+              ? { ...i, qty }
+              : i
+          );
+    const saved = await saveGuestCartState(req, res, nextRaw, current.summary.couponCode);
+    res.json(saved);
+  } catch (error) {
+    console.error('Guest cart update item error:', error);
+    res.status(500).json({ error: 'Failed to update guest cart item.' });
+  }
+});
+
+publicRouter.delete('/guest-cart/items', async (req, res) => {
+  try {
+    const productId = Number(req.query.productId || req.body?.productId || 0);
+    const variant = req.query.variant ? String(req.query.variant) : req.body?.variant ? String(req.body.variant) : undefined;
+    const color = req.query.color ? String(req.query.color) : req.body?.color ? String(req.body.color) : undefined;
+    const current = await getGuestCartState(req);
+    const nextRaw = productId
+      ? current.rawItems.filter(
+          (i) => !(i.productId === productId && i.variant === variant && i.color === color)
+        )
+      : [];
+    const saved = await saveGuestCartState(req, res, nextRaw, current.summary.couponCode);
+    res.json(saved);
+  } catch (error) {
+    console.error('Guest cart remove item error:', error);
+    res.status(500).json({ error: 'Failed to remove guest cart item.' });
+  }
+});
+
+publicRouter.delete('/guest-cart', async (req, res) => {
+  try {
+    await clearGuestCartState(req, res);
+    res.json({ ok: true, items: [], rawItems: [] });
+  } catch (error) {
+    console.error('Guest cart clear error:', error);
+    res.status(500).json({ error: 'Failed to clear guest cart.' });
   }
 });

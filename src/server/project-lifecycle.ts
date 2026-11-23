@@ -16,7 +16,11 @@ import {
 } from '../db/schema.ts';
 import { emitAdminStreamEvent, syncAdminNotificationToSupabase, type AdminStreamEntityType } from './admin-realtime.ts';
 import { dispatchLifecycleEmail } from './email.ts';
-import { generateAndStoreInvoicePdf } from './pdf-storage.ts';
+import {
+  generateAndStoreFinalProjectInvoicePdf,
+  generateAndStoreInstallmentReceiptPdf,
+  generateAndStoreInvoicePdf,
+} from './pdf-storage.ts';
 import { syncPaymentToSupabase } from './supabase-ecommerce.ts';
 import { syncProjectPaymentAndHandoverToSupabase, syncProjectQuotationToSupabase } from './supabase-projects.ts';
 import { createNotification, generateCode } from './utils.ts';
@@ -478,15 +482,29 @@ export async function reconcileProjectQuotationPayment(params: {
       receiptNumber: generateCode('NTF-RCP'),
       paymentRef,
       userId: enq.userId,
+      projectId: activeProject.id,
       entityType: 'project_quotation',
       entityId: q.id,
       paymentStage,
       amountInr,
       amountPaise: Math.round(amountInr * 100),
       razorpayPaymentId,
-      payload,
+      storageBucket: 'payment-receipts',
+      payload: {
+        ...payload,
+        installmentNumber: isAdvance ? 1 : 2,
+        totalProjectCostInr: q.totalAmountInr,
+        totalPaidToDateInr: newPaidTotal,
+        remainingBalanceInr: balanceRemaining,
+      },
     })
     .returning();
+
+  if (receiptRecord?.id) {
+    await generateAndStoreInstallmentReceiptPdf({ receiptId: receiptRecord.id }).catch((err) => {
+      console.warn('[Quotation Receipt PDF] Generation warning:', (err as Error)?.message);
+    });
+  }
 
   const [invoiceRecord] = await db
     .insert(invoices)
@@ -506,6 +524,12 @@ export async function reconcileProjectQuotationPayment(params: {
   if (invoiceRecord?.id) {
     await generateAndStoreInvoicePdf(invoiceRecord.id).catch((err) => {
       console.warn('[Invoice PDF] Generation warning:', (err as Error)?.message);
+    });
+  }
+
+  if (isFullyPaid && activeProject?.id) {
+    await generateAndStoreFinalProjectInvoicePdf({ projectId: activeProject.id }).catch((err) => {
+      console.warn('[Final Project Invoice PDF] Generation warning:', (err as Error)?.message);
     });
   }
 
